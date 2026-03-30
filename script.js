@@ -10,7 +10,11 @@ const GHOST_R     = 14;
 const DOT_R       = 4;
 const POWER_R     = 8;
 const WALL_PAD    = 3;     // Wall inset padding (creates corridors)
-const MOVE_TICK   = 14;    // Ms between tile moves (lower = faster)
+
+// TIMING: ms per tile move — adjust these values
+const PLAYER_MS_PER_TILE = 280;  // Player: 280ms per tile (≈3.6 tiles/sec — comfortable)
+const ENEMY_MS_PER_TILE = 350;  // Enemy:  350ms per tile (slightly slower than player)
+const ENEMY_FRIGHT_MS   = 700;  // Enemy frightened: half speed
 const START_LIVES = 3;
 const LEVELS      = 4;
 
@@ -224,7 +228,6 @@ function initEnemies() {
       mode: i===0?'chase':'house',
       releaseDelay: i*160,
       frightenedTimer:0,
-      _lastMove:0,
     });
   }
 }
@@ -232,6 +235,7 @@ function initEnemies() {
 // ── Game Control ───────────────────────────────────────────────────────────
 function startGame() {
   score=0; lives=START_LIVES; level=1; powerMode=false; powerTimer=0;
+  lastMoveTime=0; // reset so first move is immediate
   loadLevel();
   showScreen('game');
   if(animID) cancelAnimationFrame(animID);
@@ -278,6 +282,8 @@ function updateHUD() {
   $('highscore').textContent=getHigh();
   $('level-num').textContent=level;
   $('hs-start').textContent=getHigh();
+  const dbg=$('debug-speed');
+  if(dbg) dbg.textContent=PLAYER_MS_PER_TILE;
 }
 function updateLivesDisplay() {
   for(let i=1;i<=START_LIVES;i++) {
@@ -309,9 +315,8 @@ function tryBufferedTurn(ent) {
 }
 
 function movePlayer(now) {
-  // Speed: 180ms base at level 1, faster on higher levels (min 90ms)
-  const nowSpd = Math.max(90, 180 - level * 15);
-  if(now - lastMoveTime < nowSpd) return;
+  // Move exactly every PLAYER_MS_PER_TILE ms
+  if(now - lastMoveTime < PLAYER_MS_PER_TILE) return;
   lastMoveTime = now;
 
   // Try buffered direction first
@@ -351,9 +356,8 @@ function moveEnemy(en, now) {
     return;
   }
 
-  // Time-based: enemies slower than player
-  const baseSpd = Math.max(90, 200 - level * 12);
-  const enSpd   = en.mode === 'frightened' ? baseSpd * 1.8 : baseSpd * 0.9;
+  // Time-based: enemies per-tile timing
+  const enSpd = en.mode === 'frightened' ? ENEMY_FRIGHT_MS : ENEMY_MS_PER_TILE;
   if(now - (en._lastMove || 0) < enSpd) return;
   en._lastMove = now;
 
