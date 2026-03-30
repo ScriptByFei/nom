@@ -158,6 +158,8 @@ function showScreen(name) {
   Object.entries(screens).forEach(([k,el])=>el.classList.toggle('active',k===name));
   document.body.classList.toggle('game-active',name==='game');
   state=name;
+  // Render canvas bg so there's no black flash
+  if(canvas.width>0) render();
 }
 
 // ── Map ────────────────────────────────────────────────────────────────────

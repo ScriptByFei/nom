@@ -5,7 +5,7 @@
 }
 
 :root {
-  --col-bg:       #0a0a12;
+  --col-bg:       #0a0a18;
   --col-wall:     #6633ff;
   --col-wall-hi:  #8855ff;
   --col-dot:      #ffdd44;
@@ -43,6 +43,7 @@ html, body {
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.25s;
+  background: var(--col-bg);
 }
 .screen.active { opacity: 1; pointer-events: all; z-index: 10; }
 
@@ -152,6 +153,8 @@ html, body {
 
 /* ── HUD ───────────────────────────────────────────────────────────────── */
 #game-screen {
+  background: transparent;
+}
   justify-content: flex-start;
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -294,8 +297,12 @@ body.game-active #action-row { display: block; }
 }
 
 /* ── Canvas canvas sizing ─────────────────────────────────────────────── */
-/* Dynamically sized by JS */
 canvas {
   border-radius: 4px;
-  /* No touch select */
+  width: min(560px, 95vw);
+  height: auto;
+  aspect-ratio: 15/13;
+  max-height: 70vh;
+  display: block;
+  background: #0a0a18; /* CSS fallback — JS overrides on game start */
 }
