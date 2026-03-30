@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>NOM — Maze Chase</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Start Screen -->
+<div id="start-screen" class="screen active">
+  <div class="title-wrap">
+    <div class="game-title">NOM</div>
+    <div class="subtitle">MAZE CHASE</div>
+  </div>
+  <div class="menu-btns">
+    <button id="btn-start" class="arcade-btn">PLAY</button>
+    <button id="btn-howto" class="arcade-btn secondary">HOW TO PLAY</button>
+  </div>
+  <div class="highscore-display">
+    <span class="hs-label">HIGHSCORE</span>
+    <span class="hs-value" id="hs-start">0</span>
+  </div>
+  <div class="credits">A browser arcade game</div>
+</div>
+
+<!-- How To Play -->
+<div id="howto-screen" class="screen">
+  <div class="howto-box">
+    <div class="howto-title">HOW TO PLAY</div>
+    <div class="howto-item"><span class="howto-icon dot-icon"></span> Collect all dots</div>
+    <div class="howto-item"><span class="howto-icon power-icon"></span> Power crystal = eat enemies!</div>
+    <div class="howto-item"><span class="howto-icon life-icon"></span> 3 lives — don't touch enemies</div>
+    <div class="howto-item"><span class="howto-icon dpad-icon">D</span> Use D-Pad to move</div>
+    <div class="howto-item"><span class="howto-icon">⇄</span> Swipe also works</div>
+    <div class="howto-levels">
+      <div class="level-info">4 LEVELS</div>
+      <div class="level-info dim">Each harder than the last</div>
+    </div>
+    <button id="btn-back" class="arcade-btn">BACK</button>
+  </div>
+</div>
+
+<!-- Game Screen -->
+<div id="game-screen" class="screen">
+  <div id="hud">
+    <div class="hud-item"><span class="hud-label">SCORE</span><span id="score">0</span></div>
+    <div class="hud-item center"><span class="hud-label">LEVEL</span><span id="level-num">1</span></div>
+    <div class="hud-item right"><span class="hud-label">BEST</span><span id="highscore">0</span></div>
+  </div>
+
+  <div id="lives-row">
+    <div class="life-dot" id="life-1"></div>
+    <div class="life-dot" id="life-2"></div>
+    <div class="life-dot" id="life-3"></div>
+  </div>
+
+  <div id="canvas-wrap">
+    <canvas id="game-canvas"></canvas>
+    <div id="overlay-msg" class="overlay hidden"></div>
+  </div>
+
+  <!-- D-Pad -->
+  <div id="dpad">
+    <div class="dpad-up"    data-dir="up">    <div class="arr">▲</div></div>
+    <div class="dpad-left"  data-dir="left"> <div class="arr">◀</div></div>
+    <div class="dpad-right" data-dir="right"><div class="arr">▶</div></div>
+    <div class="dpad-down"  data-dir="down"> <div class="arr">▼</div></div>
+  </div>
+
+  <!-- Action buttons -->
+  <div id="action-row">
+    <button id="btn-pause" class="action-btn">❚❚</button>
+  </div>
+</div>
+
+<!-- Pause Screen -->
+<div id="pause-screen" class="screen">
+  <div class="pause-box">
+    <div class="pause-title">PAUSED</div>
+    <button id="btn-resume" class="arcade-btn">RESUME</button>
+    <button id="btn-restart" class="arcade-btn secondary">RESTART</button>
+  </div>
+</div>
+
+<!-- Game Over Screen -->
+<div id="gameover-screen" class="screen">
+  <div class="gameover-box">
+    <div class="gameover-title" id="go-title">GAME OVER</div>
+    <div class="go-score">
+      <div class="go-label">SCORE</div>
+      <div class="go-value" id="go-score">0</div>
+    </div>
+    <div class="go-high" id="go-high-wrap">
+      <div class="go-label">HIGHSCORE</div>
+      <div class="go-value gold" id="go-high">0</div>
+    </div>
+    <div class="new-record hidden" id="new-record">★ NEW RECORD ★</div>
+    <button id="btn-retry" class="arcade-btn">PLAY AGAIN</button>
+    <button id="btn-menu"  class="arcade-btn secondary">MENU</button>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
