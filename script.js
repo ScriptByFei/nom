@@ -5,7 +5,7 @@
 
 // ── Constants ─────────────────────────────────────────────────────────────
 const TILE       = 32;
-const MOVE_SPEED = 0.18;
+const MOVE_SPEED = 0.08;
 const DOT_PTS    = 10;
 const POWER_PTS  = 50;
 const EAT_PTS    = 200;
