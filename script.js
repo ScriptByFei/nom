@@ -461,8 +461,8 @@ function render() {
         ctx.fillStyle=C.wallD;
         ctx.fillRect(px+3,py+3,ts-6,ts-6);
       } else if(tile===T_DOT) {
-        // Path bg
-        ctx.fillStyle='#0c0c20';
+        // Path bg — dark blue so corridors are visible
+        ctx.fillStyle='#1e1e3a';
         ctx.fillRect(px,py,ts,ts);
         // Dot
         ctx.fillStyle=C.dot;
@@ -471,7 +471,7 @@ function render() {
         ctx.fill();
       } else if(tile===T_PWR) {
         // Path bg
-        ctx.fillStyle='#0c0c20';
+        ctx.fillStyle='#1e1e3a';
         ctx.fillRect(px,py,ts,ts);
         // Power pellet
         const pl=Math.sin(tick*.12)*.2+.8;
@@ -485,8 +485,8 @@ function render() {
         ctx.fillStyle=C.house;
         ctx.fillRect(px,py,ts,ts);
       } else {
-        // Empty path — still draw bg so corridors are visible
-        ctx.fillStyle='#0c0c20';
+        // Empty path — visible dark blue
+        ctx.fillStyle='#1e1e3a';
         ctx.fillRect(px,py,ts,ts);
       }
     }
