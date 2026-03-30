@@ -5,7 +5,8 @@
 
 // ── Constants ─────────────────────────────────────────────────────────────
 const TILE       = 32;
-const MOVE_SPEED = 0.08;
+const MOVE_SPEED = 0.09;
+const ENEMY_SPEED = 0.08;
 const DOT_PTS    = 10;
 const POWER_PTS  = 50;
 const EAT_PTS    = 200;
@@ -308,25 +309,84 @@ function setPowerMode(on) {
 }
 
 // ── Movement ────────────────────────────────────────────────────────────────
-function tryTurn(ent,ghost) {
-  const d=DIR[ent.nextDir];
-  const nx=wrapX(Math.round(ent.fx)+d.dx), ny=Math.round(ent.fy)+d.dy;
-  if(walkable(nx,ny,ghost)) { ent.dir=ent.nextDir; return true; }
+// Tile-based: player moves tile-by-tile with smooth visual interpolation
+// ent.fx, ent.fy = visual float position
+// ent.x, ent.y  = integer tile coords
+
+function isAtTileCenter(ent) {
+  return Math.abs(ent.fx - Math.round(ent.fx)) < 0.12 &&
+         Math.abs(ent.fy - Math.round(ent.fy)) < 0.12;
+}
+
+function snapToTile(ent) {
+  ent.fx = Math.round(ent.fx);
+  ent.fy = Math.round(ent.fy);
+  ent.x = wrapX(ent.fx);
+  ent.y = ent.fy;
+}
+
+function tryTurnAtCenter(ent, ghost) {
+  if (!isAtTileCenter(ent)) return false;
+  snapToTile(ent);
+  const d = DIR[ent.nextDir];
+  const nx = wrapX(ent.x + d.dx), ny = ent.y + d.dy;
+  if (walkable(nx, ny, ghost)) {
+    ent.dir = ent.nextDir;
+    return true;
+  }
   return false;
 }
 
-function moveEnt(ent,ghost,spd) {
-  const d=DIR[ent.dir];
-  const nx=ent.fx+d.dx*spd, ny=ent.fy+d.dy*spd;
-  const rx=wrapX(Math.round(nx)), ry=Math.round(ny);
-  if(!walkable(rx,ry,ghost)) {
-    ent.fx=Math.round(ent.fx); ent.fy=Math.round(ent.fy);
-    tryTurn(ent,ghost); return false;
+function moveTile(ent, ghost) {
+  // If not at a tile center, move toward current target tile
+  if (!isAtTileCenter(ent)) {
+    const tx = Math.round(ent.x), ty = Math.round(ent.y);
+    const dx = tx - ent.fx, dy = ty - ent.fy;
+    const step = MOVE_SPEED * 2.5;
+    if (Math.abs(dx) > 0.01) ent.fx += Math.sign(dx) * Math.min(Math.abs(dx), step);
+    if (Math.abs(dy) > 0.01) ent.fy += Math.sign(dy) * Math.min(Math.abs(dy), step);
+    // Snap if close enough
+    if (Math.abs(ent.fx - tx) < 0.05) ent.fx = tx;
+    if (Math.abs(ent.fy - ty) < 0.05) ent.fy = ty;
+    return;
   }
-  ent.fx=nx; ent.fy=ny;
-  if(ent.fx<-.5) ent.fx=mapCols-.5;
-  if(ent.fx>mapCols-.5) ent.fx=-.5;
-  return true;
+
+  snapToTile(ent);
+  tryTurnAtCenter(ent, ghost);
+
+  // Move one tile in current direction
+  const d = DIR[ent.dir];
+  const nx = wrapX(ent.x + d.dx), ny = ent.y + d.dy;
+  if (walkable(nx, ny, ghost)) {
+    ent.x = nx; ent.y = ny;
+    ent.fx = nx; ent.fy = ny;
+  } else {
+    // Wall ahead — snap and stay
+    snapToTile(ent);
+  }
+  // Tunnel wrap
+  if (ent.x < 0) { ent.x = mapCols - 1; ent.fx = ent.x; }
+  if (ent.x >= mapCols) { ent.x = 0; ent.fx = 0; }
+}
+
+function moveEnt(ent, ghost, spd) {
+  if (!isAtTileCenter(ent)) {
+    const tx = Math.round(ent.x), ty = Math.round(ent.y);
+    const dx = tx - ent.fx, dy = ty - ent.fy;
+    if (Math.abs(dx) > 0.01) ent.fx += Math.sign(dx) * Math.min(Math.abs(dx), spd);
+    if (Math.abs(dy) > 0.01) ent.fy += Math.sign(dy) * Math.min(Math.abs(dy), spd);
+    if (Math.abs(ent.fx - tx) < 0.05) ent.fx = tx;
+    if (Math.abs(ent.fy - ty) < 0.05) ent.fy = ty;
+    return;
+  }
+  snapToTile(ent);
+  const d = DIR[ent.dir];
+  const nx = wrapX(ent.x + d.dx), ny = ent.y + d.dy;
+  if (walkable(nx, ny, ghost)) {
+    ent.x = nx; ent.y = ny; ent.fx = nx; ent.fy = ny;
+  }
+  if (ent.x < 0) { ent.x = mapCols - 1; ent.fx = ent.x; }
+  if (ent.x >= mapCols) { ent.x = 0; ent.fx = 0; }
 }
 
 // ── Enemy AI ────────────────────────────────────────────────────────────────
@@ -355,7 +415,7 @@ function pickDir(en) {
 
 // ── Collision ───────────────────────────────────────────────────────────────
 function checkCollisions() {
-  const px=Math.round(player.fx), py=Math.round(player.fy);
+  const px=player.x, py=player.y;
   const tile=tileAt(px,py);
   if(tile===T_DOT) {
     map[py][wrapX(px)]=T_PATH;
@@ -399,8 +459,7 @@ function update() {
       }
     }
   });
-  tryTurn(player,false);
-  moveEnt(player,false,MOVE_SPEED);
+  moveTile(player, false);
   if(tick%2===0) {
     enemies.forEach(en=>{
       if(en.mode==='house') return;
@@ -411,11 +470,11 @@ function update() {
           en.fx=hx; en.fy=hy; en.x=hx; en.y=hy;
         } else {
           en.dir=(en.fx<hx)?'right':(en.fx>hx)?'left':(en.fy<hy)?'down':'up';
-          moveEnt(en,true,MOVE_SPEED*1.5);
+          moveEnt(en, true, ENEMY_SPEED * 2.0);
         }
         return;
       }
-      const spd=en.mode==='frightened'?en.speed*.5:en.speed;
+      const spd=en.mode==='frightened'?ENEMY_SPEED*.5:en.speed;
       en.dir=pickDir(en);
       moveEnt(en,true,spd);
     });
