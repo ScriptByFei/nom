@@ -162,6 +162,7 @@ const setHigh = v => { if(v>getHigh()) localStorage.setItem('nom_hi',String(v));
 // ── Screen Management ─────────────────────────────────────────────────────
 function showScreen(name) {
   Object.entries(screens).forEach(([k,el]) => el.classList.toggle('active', k===name));
+  document.body.classList.toggle('game-active', name==='game');
   state = name;
 }
 
@@ -524,11 +525,10 @@ document.addEventListener('keydown', e => {
   if(state==='game'&&(e.key==='Escape'||e.key==='p'||e.key==='P')) togglePause();
 });
 
-// Touch detection (force show dpad)
+// Touch detection
 (function() {
   if('ontouchstart' in window||navigator.maxTouchPoints>0) {
     dpad.classList.add('touch-active');
-    actionRow.classList.add('touch-active');
   }
 })();
 

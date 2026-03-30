@@ -235,14 +235,11 @@ canvas {
   width: 190px;
   height: 190px;
   z-index: 50;
+  pointer-events: auto;
 }
 
-/* Show D-pad on touch devices */
-@media (hover: none) and (pointer: coarse) {
-  #dpad { display: block; }
-}
-/* Also show when touch was detected */
-#dpad.touch-active { display: block; }
+/* Show D-pad when game is active */
+body.game-active #dpad { display: block; }
 
 .dpad-up, .dpad-down, .dpad-left, .dpad-right {
   position: absolute;
@@ -275,11 +272,10 @@ canvas {
   right: 20px;
   z-index: 50;
   display: none;
+  pointer-events: auto;
 }
-@media (hover: none) and (pointer: coarse) {
-  #action-row { display: block; }
-}
-#action-row.touch-active { display: block; }
+
+body.game-active #action-row { display: block; }
 
 .action-btn {
   width: 54px; height: 54px;
