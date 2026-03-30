@@ -1,111 +1,104 @@
 'use strict';
 // ═══════════════════════════════════════════════════════════════════════════
-//  NOM — Maze Chase  |  Complete game script
+//  NOM — Maze Chase  |  v2 — fixed collision & corridors
 // ═══════════════════════════════════════════════════════════════════════════
 
-// ── Constants ─────────────────────────────────────────────────────────────
-const TILE       = 32;
-const MOVE_SPEED = 0.09;
-const ENEMY_SPEED = 0.08;
-const DOT_PTS    = 10;
-const POWER_PTS  = 50;
-const EAT_PTS    = 200;
+// ── Config ───────────────────────────────────────────────────────────────
+const TILE        = 40;   // Logical tile px size (fixed, canvas scales)
+const PLAYER_R    = 14;   // Visual radius in px
+const GHOST_R     = 14;
+const DOT_R       = 4;
+const POWER_R     = 8;
+const WALL_PAD    = 3;     // Wall inset padding (creates corridors)
+const MOVE_TICK   = 14;    // Ms between tile moves (lower = faster)
 const START_LIVES = 3;
-const POWER_DUR   = 5; // seconds
 const LEVELS      = 4;
 
-const T_WALL = 0, T_DOT = 1, T_PWR = 2, T_PATH = 3, T_HOUS = 9;
+const T_WALL = 1, T_PATH = 0, T_DOT = 2, T_PWR = 3, T_HOUS = 4;
 
+// Colors
 const C = {
-  bg:    '#0a0a12',
-  wall:  '#6633ff',
-  wallHi:'#8855ff',
+  bg:    '#0a0a18',
+  wall:  '#5533cc',
+  wallD: '#3311aa',
   dot:   '#ffdd44',
   power: '#00ffcc',
   player:'#ffee00',
-  pw: ['#ff3366','#ff66ff','#33ccff','#ffaa33','#44ff88','#ff8844'],
-};
-
-const DIR = {
-  up:    { dx:  0, dy: -1 },
-  down:  { dx:  0, dy:  1 },
-  left:  { dx: -1, dy:  0 },
-  right: { dx:  1, dy:  0 },
+  pw: ['#ff3366','#ff66ff','#33ccff','#ffaa33'],
+  house: '#110022',
 };
 
 // ── Level Maps ─────────────────────────────────────────────────────────────
+// 0=path, 1=wall, 2=dot, 3=power, 4=ghost house (center)
+// Designed with CORRIDORS: paths are explicit walkable corridors
 const LEVEL_MAPS = [
-  // Level 1 — Intro
+  // Level 1 — Simple open corridors
   [
-    [0,0,0,0,0,0,0,0,0,0,0,0,0],
-    [0,1,1,1,1,1,1,1,1,1,1,1,0],
-    [0,1,0,0,0,1,0,0,0,0,0,1,0],
-    [0,2,0,0,0,1,0,0,0,0,0,2,0],
-    [0,1,0,0,0,1,1,1,1,1,0,1,0],
-    [0,1,1,1,0,3,3,3,3,1,0,1,0],
-    [0,0,0,1,0,1,9,9,1,1,0,1,0],
-    [0,0,0,1,0,1,9,9,1,1,0,1,0],
-    [0,1,1,1,0,1,1,1,1,1,0,1,0],
-    [0,1,0,0,0,1,1,1,1,1,0,1,0],
-    [0,1,0,0,0,1,0,0,0,0,0,1,0],
-    [0,2,0,0,0,1,0,0,0,0,0,2,0],
-    [0,1,1,1,1,1,1,1,1,1,1,1,0],
-    [0,0,0,0,0,0,0,0,0,0,0,0,0],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,2,2,2,2,2,2,1,2,2,2,2,2,2,1],
+    [1,2,1,1,1,2,1,1,1,2,1,1,1,2,1],
+    [1,3,1,0,1,2,1,0,1,2,1,0,1,3,1],
+    [1,2,1,0,1,2,2,2,2,2,1,0,1,2,1],
+    [1,2,2,2,2,0,0,0,0,0,2,2,2,2,1],
+    [1,1,1,1,1,0,4,4,4,0,1,1,1,1,1],
+    [1,2,2,2,2,0,4,4,4,0,2,2,2,2,1],
+    [1,2,1,0,1,2,2,2,2,2,1,0,1,2,1],
+    [1,3,1,0,1,2,1,0,1,2,1,0,1,3,1],
+    [1,2,1,1,1,2,1,1,1,2,1,1,1,2,1],
+    [1,2,2,2,2,2,2,1,2,2,2,2,2,2,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
   ],
-  // Level 2 — Corridors
+  // Level 2 — More complex
   [
-    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-    [0,1,1,1,1,1,1,1,1,1,1,1,1,1,0],
-    [0,1,0,0,0,0,0,1,0,1,0,0,0,1,0],
-    [0,1,0,1,1,1,0,1,0,1,0,1,1,1,0],
-    [0,2,0,1,0,0,0,3,0,0,0,1,0,2,0],
-    [0,1,0,1,0,1,1,1,1,1,0,1,0,1,0],
-    [0,1,1,1,0,1,9,9,9,1,0,1,1,1,0],
-    [0,1,0,1,0,1,9,9,9,1,0,1,0,1,0],
-    [0,1,0,1,0,1,1,1,1,1,0,1,0,1,0],
-    [0,2,0,1,0,0,0,3,0,0,0,1,0,2,0],
-    [0,1,0,1,1,1,0,1,0,1,1,1,0,1,0],
-    [0,1,0,0,0,0,0,1,0,1,0,0,0,1,0],
-    [0,1,1,1,1,1,1,1,1,1,1,1,1,1,0],
-    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,2,2,2,2,2,2,1,2,2,2,2,2,2,2,2,1],
+    [1,2,1,1,1,1,2,1,2,1,1,1,1,1,2,2,1],
+    [1,3,1,0,0,1,2,0,2,0,0,0,0,1,3,2,1],
+    [1,2,1,0,2,2,2,2,2,2,2,2,0,1,2,2,1],
+    [1,2,2,2,2,0,0,0,0,0,0,2,2,2,2,2,1],
+    [1,1,1,1,2,0,4,4,4,4,0,2,1,1,1,1,1],
+    [1,2,2,2,2,0,4,4,4,4,0,2,2,2,2,2,1],
+    [1,2,1,2,2,2,2,2,1,2,2,2,2,1,2,2,1],
+    [1,3,1,2,0,0,0,0,0,0,0,0,2,1,3,2,1],
+    [1,2,1,2,2,2,2,2,1,2,2,2,2,1,2,2,1],
+    [1,2,2,2,2,2,2,2,1,2,2,2,2,2,2,2,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
   ],
-  // Level 3 — Classic
+  // Level 3 — Classic layout
   [
-    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-    [0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0],
-    [0,1,0,0,0,0,0,1,0,1,0,0,0,0,0,1,0],
-    [0,2,0,0,0,0,0,1,0,1,0,0,0,0,0,2,0],
-    [0,1,0,1,1,1,0,1,1,1,0,1,1,1,0,1,0],
-    [0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0],
-    [0,0,0,0,0,1,0,1,3,1,0,1,0,0,0,0,0],
-    [0,1,1,1,0,1,0,1,9,1,0,1,0,1,1,1,0],
-    [0,0,0,1,0,1,0,1,9,1,0,1,0,1,0,0,0],
-    [0,1,1,1,0,1,0,1,1,1,0,1,0,1,1,1,0],
-    [0,0,0,0,0,1,0,1,3,1,0,1,0,0,0,0,0],
-    [0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0],
-    [0,1,0,0,0,0,0,1,0,1,0,0,0,0,0,1,0],
-    [0,2,0,0,0,0,0,1,0,1,0,0,0,0,0,2,0],
-    [0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0],
-    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,2,2,2,2,2,2,2,2,1,2,2,2,2,2,2,2,2,1],
+    [1,2,1,1,1,1,2,1,2,1,2,1,2,1,1,1,1,2,1],
+    [1,3,1,0,0,1,2,0,2,0,2,0,2,1,0,0,1,3,1],
+    [1,2,1,0,2,2,2,2,2,2,2,2,2,2,2,0,1,2,1],
+    [1,2,2,2,2,0,0,0,1,1,1,0,0,0,2,2,2,2,1],
+    [1,1,1,1,2,0,1,0,0,0,0,0,1,0,2,1,1,1,1],
+    [1,2,2,2,2,0,1,0,4,4,4,0,1,0,2,2,2,2,1],
+    [1,1,1,1,2,0,1,0,4,4,4,0,1,0,2,1,1,1,1],
+    [1,2,2,2,2,0,1,1,1,1,1,1,1,0,2,2,2,2,1],
+    [1,2,1,2,2,2,2,2,2,1,2,2,2,2,2,2,1,2,1],
+    [1,3,1,2,0,0,0,0,0,0,0,0,0,0,2,1,3,2,1],
+    [1,2,1,2,2,2,2,2,2,1,2,2,2,2,2,2,1,2,1],
+    [1,2,2,2,2,2,2,2,2,1,2,2,2,2,2,2,2,2,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
   ],
   // Level 4 — Challenge
   [
-    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-    [0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0],
-    [0,1,0,0,0,0,0,1,0,1,0,1,0,0,0,0,0,1,0],
-    [0,2,0,0,0,0,0,1,0,1,0,1,0,0,0,0,0,2,0],
-    [0,1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,0],
-    [0,1,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,1,0],
-    [0,1,1,1,0,1,1,1,0,1,0,1,1,1,0,1,1,1,0],
-    [0,0,0,1,0,1,9,9,9,9,9,9,9,1,0,1,0,0,0],
-    [0,1,1,1,0,1,9,9,9,9,9,9,9,1,0,1,1,1,0],
-    [0,1,0,1,0,1,1,1,0,1,0,1,1,1,0,1,0,1,0],
-    [0,1,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,1,0],
-    [0,1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,0],
-    [0,2,0,0,0,0,0,1,0,1,0,1,0,0,0,0,0,2,0],
-    [0,1,0,0,0,0,0,1,0,1,0,1,0,0,0,0,0,1,0],
-    [0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0],
-    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,2,2,2,2,2,2,2,2,2,1,2,2,2,2,2,2,2,2,2,1],
+    [1,2,1,1,1,1,1,2,1,2,1,2,1,2,1,1,1,1,1,2,1],
+    [1,3,1,0,0,0,1,2,0,2,0,2,0,2,1,0,0,0,1,3,1],
+    [1,2,1,0,2,0,2,2,2,2,2,2,2,2,2,0,2,0,1,2,1],
+    [1,2,2,2,2,2,0,0,0,1,1,1,0,0,0,2,2,2,2,2,1],
+    [1,1,1,1,1,2,0,1,0,0,0,0,0,1,0,2,1,1,1,1,1],
+    [1,2,2,2,2,2,0,1,0,4,4,4,0,1,0,2,2,2,2,2,1],
+    [1,1,1,1,1,2,0,1,1,1,1,1,1,1,0,2,1,1,1,1,1],
+    [1,2,2,2,2,2,0,0,0,0,0,0,0,0,0,2,2,2,2,2,1],
+    [1,2,1,2,2,2,2,2,2,2,1,2,2,2,2,2,2,1,2,2,1],
+    [1,3,1,2,0,0,0,0,0,0,0,0,0,0,0,2,1,3,2,2,1],
+    [1,2,1,2,2,2,2,2,2,2,1,2,2,2,2,2,2,1,2,2,1],
+    [1,2,2,2,2,2,2,2,2,2,1,2,2,2,2,2,2,2,2,2,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
   ],
 ];
 
@@ -120,113 +113,118 @@ const screens = {
 };
 const canvas = $('game-canvas');
 const ctx    = canvas.getContext('2d');
-const $hsStart = $('hs-start');
 
 // ── Game State ─────────────────────────────────────────────────────────────
 let score=0, lives=START_LIVES, level=1;
-let map=[], mapRows=0, mapCols=0, tileSize=TILE;
+let map=[], mapRows=0, mapCols=0;
 let dotsTotal=0, dotsEaten=0;
 let player={}, enemies=[];
 let powerMode=false, powerTimer=0;
+let lastMoveTime=0;
 let animID=null, tick=0;
 let state='start';
 
 // ── Audio ──────────────────────────────────────────────────────────────────
 let _ac=null;
 const ac = () => { if(!_ac) try{ _ac=new(window.AudioContext||window.webkitAudioContext)(); }catch(e){} return _ac; };
-
-function tone(f,d,t='square',v=.12) {
-  try {
-    const a=ac(); if(!a) return;
-    const o=a.createOscillator(), g=a.createGain();
+function tone(f,d,t='square',v=.10) {
+  try { const a=ac(); if(!a) return;
+    const o=a.createOscillator(),g=a.createGain();
     o.connect(g); g.connect(a.destination);
     o.type=t; o.frequency.value=f;
     g.gain.value=v;
-    g.gain.exponentialRampToValueAtTime(.001, a.currentTime+d);
+    g.gain.exponentialRampToValueAtTime(.001,a.currentTime+d);
     o.start(a.currentTime); o.stop(a.currentTime+d);
   } catch(e){}
 }
-
 const SFX = {
-  eat:    () => tone(620,.05,.08),
-  power:  () => { tone(380,.1,'sawtooth',.13); setTimeout(()=>tone(700,.15,'sawtooth',.13),80); },
-  eatGhost:()=>{ tone(900,.08,.12); setTimeout(()=>tone(1200,.12,.12),60); },
-  die:    ()=>{ tone(300,.12,'sawtooth',.15); setTimeout(()=>tone(200,.2,'sawtooth',.12),120); setTimeout(()=>tone(150,.3,'sawtooth',.1),280); },
-  levelUp:()=>{ [523,659,784,1047].forEach((f,i)=>setTimeout(()=>tone(f,.15,.12),i*100)); },
+  eat:    ()=>tone(620,.04,.08),
+  power:  ()=>{ tone(380,.08,'sawtooth',.12); setTimeout(()=>tone(700,.12,'sawtooth',.12),70); },
+  eatGhost:()=>{ tone(900,.07,.12); setTimeout(()=>tone(1200,.1,.12),55); },
+  die:    ()=>{ tone(300,.1,'sawtooth',.15); setTimeout(()=>tone(200,.18,'sawtooth',.12),110); setTimeout(()=>tone(150,.28,'sawtooth',.1),260); },
+  levelUp:()=>{ [523,659,784,1047].forEach((f,i)=>setTimeout(()=>tone(f,.13,.12),i*90)); },
 };
 
 // ── Storage ────────────────────────────────────────────────────────────────
 const getHigh = () => parseInt(localStorage.getItem('nom_hi')||'0');
 const setHigh = v => { if(v>getHigh()) localStorage.setItem('nom_hi',String(v)); };
 
-// ── Screen Management ─────────────────────────────────────────────────────
+// ── Screen ─────────────────────────────────────────────────────────────────
 function showScreen(name) {
-  Object.entries(screens).forEach(([k,el]) => el.classList.toggle('active', k===name));
-  document.body.classList.toggle('game-active', name==='game');
-  state = name;
+  Object.entries(screens).forEach(([k,el])=>el.classList.toggle('active',k===name));
+  document.body.classList.toggle('game-active',name==='game');
+  state=name;
 }
 
-// ── Map Helpers ────────────────────────────────────────────────────────────
+// ── Map ────────────────────────────────────────────────────────────────────
 function initMap(lvl) {
   const raw = LEVEL_MAPS[(lvl-1)%LEVELS];
-  mapRows = raw.length; mapCols = raw[0].length;
-  map = raw.map(r=>[...r]);
+  mapRows=raw.length; mapCols=raw[0].length;
+  map=raw.map(r=>[...r]);
   dotsTotal=0; dotsEaten=0;
   for(let y=0;y<mapRows;y++) for(let x=0;x<mapCols;x++)
     if(map[y][x]===T_DOT||map[y][x]===T_PWR) dotsTotal++;
 }
 
-const wrapX = cx => ((cx%mapCols)+mapCols)%mapCols;
+function tileWalkable(x,y) {
+  if(y<0||y>=mapRows) return false;
+  const xw=((x%mapCols)+mapCols)%mapCols;
+  const t=map[y][xw];
+  return t!==T_WALL;
+}
 
 function tileAt(x,y) {
   if(y<0||y>=mapRows) return T_WALL;
-  return map[y][wrapX(x)];
+  return map[y][((x%mapCols)+mapCols)%mapCols];
 }
 
-function walkable(x,y,ghost) {
-  const t=tileAt(Math.round(x),Math.round(y));
-  if(t===T_WALL) return false;
-  if(!ghost && t===T_HOUS) return false;
-  return true;
-}
+function wrapX(x) { return ((x%mapCols)+mapCols)%mapCols; }
 
 // ── Canvas Sizing ───────────────────────────────────────────────────────────
 function resizeCanvas() {
-  const wrap = $('canvas-wrap');
-  const ww=wrap.clientWidth-8, wh=wrap.clientHeight-8;
-  const tW=Math.floor(ww/mapCols), tH=Math.floor(wh/mapRows);
-  tileSize=Math.min(tW,tH,42);
-  canvas.width=mapCols*tileSize; canvas.height=mapRows*tileSize;
+  const wrap=$('canvas-wrap');
+  const ww=wrap.clientWidth-4, wh=wrap.clientHeight-4;
+  const maxW=Math.floor(ww/mapCols), maxH=Math.floor(wh/mapRows);
+  const ts=Math.min(maxW,maxH,44);
+  canvas.width=mapCols*ts; canvas.height=mapRows*ts;
   canvas.style.width=canvas.width+'px'; canvas.style.height=canvas.height+'px';
+  return ts;
 }
 
 // ── Entity Init ─────────────────────────────────────────────────────────────
 function findSpawn() {
-  for(let y=mapRows-1;y>=0;y--) for(let x=0;x<mapCols;x++)
-    if(map[y][x]===T_PATH||map[y][x]===T_DOT||map[y][x]===T_PWR) return {x,y};
+  // Spawn: bottom-center, walkable
+  for(let y=mapRows-1;y>=0;y--)
+    for(let x=Math.floor(mapCols/2)-1;x<=Math.floor(mapCols/2)+1;x++)
+      if(x>=0&&x<mapCols&&tileWalkable(x,y)) return {x,y};
+  for(let y=mapRows-1;y>=0;y--)
+    for(let x=0;x<mapCols;x++)
+      if(tileWalkable(x,y)) return {x,y};
   return {x:Math.floor(mapCols/2),y:mapRows-2};
 }
 
 function initPlayer() {
   const sp=findSpawn();
-  player={x:sp.x,y:sp.y,fx:sp.x,fy:sp.y,dir:'left',nextDir:'left',mouth:0};
+  player={x:sp.x,y:sp.y,dir:'left',nextDir:'left',mouth:0,moveCd:0};
 }
 
 function initEnemies() {
   const house=[];
-  for(let y=0;y<mapRows;y++) for(let x=0;x<mapCols;x++) if(map[y][x]===T_HOUS) house.push({x,y});
+  for(let y=0;y<mapRows;y++) for(let x=0;x<mapCols;x++)
+    if(map[y][x]===T_HOUS) house.push({x,y});
   if(!house.length) house.push({x:Math.floor(mapCols/2),y:Math.floor(mapRows/2)});
   const count=Math.min(2+level,6);
   enemies=[];
   for(let i=0;i<count;i++) {
     const h=house[i%house.length];
     enemies.push({
-      x:h.x,y:h.y,fx:h.x,fy:h.y,
-      dir:'up', color:C.pw[i%C.pw.length],
+      x:h.x,y:h.y,
+      dir:'up',
+      color:C.pw[i%C.pw.length],
       mode: i===0?'chase':'house',
-      releaseDelay: i*130,
+      releaseDelay: i*160,
       frightenedTimer:0,
-      speed: 0.10+i*0.012,
+      moveCd:0,
     });
   }
 }
@@ -241,12 +239,11 @@ function startGame() {
 }
 
 function loadLevel() {
+  const ts=resizeCanvas();
   initMap(level);
-  resizeCanvas();
   initPlayer();
   initEnemies();
-  updateHUD();
-  updateLivesDisplay();
+  updateHUD(); updateLivesDisplay();
 }
 
 function nextLevel() {
@@ -266,7 +263,6 @@ function playerDied() {
 }
 
 function gameOver() {
-  powerMode=false; powerTimer=0;
   cancelAnimationFrame(animID);
   const hi=getHigh(), isNew=score>hi;
   if(isNew) setHigh(score);
@@ -281,16 +277,14 @@ function updateHUD() {
   $('score').textContent=score;
   $('highscore').textContent=getHigh();
   $('level-num').textContent=level;
-  $hsStart.textContent=getHigh();
+  $('hs-start').textContent=getHigh();
 }
-
 function updateLivesDisplay() {
   for(let i=1;i<=START_LIVES;i++) {
     const el=$(`life-${i}`);
     if(el) el.classList.toggle('lost',i>lives);
   }
 }
-
 function showOverlay(title,sub,ms=2000) {
   const el=$('overlay-msg');
   el.innerHTML=`<div>${title}</div>${sub?`<div style="font-size:.55em;color:var(--col-dim);margin-top:6px">${sub}</div>`:''}`;
@@ -299,137 +293,121 @@ function showOverlay(title,sub,ms=2000) {
   el._tid=setTimeout(()=>el.classList.add('hidden'),ms);
 }
 
-// ── Power ──────────────────────────────────────────────────────────────────
-function setPowerMode(on) {
-  powerMode=on;
-  if(on) {
-    powerTimer=Math.round(POWER_DUR*60);
-    enemies.forEach(e=>{ if(e.mode!=='eaten') e.mode='frightened'; });
-  }
-}
-
 // ── Movement ────────────────────────────────────────────────────────────────
-// Tile-based: player moves tile-by-tile with smooth visual interpolation
-// ent.fx, ent.fy = visual float position
-// ent.x, ent.y  = integer tile coords
+const DIRS=['up','down','left','right'];
+const DX={up:0,down:0,left:-1,right:1};
+const DY={up:-1,down:1,left:0,right:0};
+const OPP={up:'down',down:'up',left:'right',right:'left'};
 
-function isAtTileCenter(ent) {
-  return Math.abs(ent.fx - Math.round(ent.fx)) < 0.12 &&
-         Math.abs(ent.fy - Math.round(ent.fy)) < 0.12;
-}
-
-function snapToTile(ent) {
-  ent.fx = Math.round(ent.fx);
-  ent.fy = Math.round(ent.fy);
-  ent.x = wrapX(ent.fx);
-  ent.y = ent.fy;
-}
-
-function tryTurnAtCenter(ent, ghost) {
-  if (!isAtTileCenter(ent)) return false;
-  snapToTile(ent);
-  const d = DIR[ent.nextDir];
-  const nx = wrapX(ent.x + d.dx), ny = ent.y + d.dy;
-  if (walkable(nx, ny, ghost)) {
-    ent.dir = ent.nextDir;
+function tryBufferedTurn(ent) {
+  const nx=ent.x+DX[ent.nextDir], ny=ent.y+DY[ent.nextDir];
+  if(tileWalkable(nx,ny)) {
+    ent.dir=ent.nextDir;
     return true;
   }
   return false;
 }
 
-function moveTile(ent, ghost) {
-  // If not at a tile center, move toward current target tile
-  if (!isAtTileCenter(ent)) {
-    const tx = Math.round(ent.x), ty = Math.round(ent.y);
-    const dx = tx - ent.fx, dy = ty - ent.fy;
-    const step = MOVE_SPEED * 2.5;
-    if (Math.abs(dx) > 0.01) ent.fx += Math.sign(dx) * Math.min(Math.abs(dx), step);
-    if (Math.abs(dy) > 0.01) ent.fy += Math.sign(dy) * Math.min(Math.abs(dy), step);
-    // Snap if close enough
-    if (Math.abs(ent.fx - tx) < 0.05) ent.fx = tx;
-    if (Math.abs(ent.fy - ty) < 0.05) ent.fy = ty;
-    return;
-  }
+function movePlayer(now) {
+  if(player.moveCd>0) { player.moveCd--; return; }
+  const nowSpd=Math.max(8,14-level*1.5); // faster on higher levels
+  if(now-lastMoveTime<nowSpd) return;
+  lastMoveTime=now;
 
-  snapToTile(ent);
-  tryTurnAtCenter(ent, ghost);
+  // Try buffered direction first
+  tryBufferedTurn(player);
 
-  // Move one tile in current direction
-  const d = DIR[ent.dir];
-  const nx = wrapX(ent.x + d.dx), ny = ent.y + d.dy;
-  if (walkable(nx, ny, ghost)) {
-    ent.x = nx; ent.y = ny;
-    ent.fx = nx; ent.fy = ny;
-  } else {
-    // Wall ahead — snap and stay
-    snapToTile(ent);
+  // Move in current direction
+  const nx=player.x+DX[player.dir], ny=player.y+DY[player.dir];
+  if(tileWalkable(nx,ny)) {
+    player.x=wrapX(nx); player.y=ny;
   }
   // Tunnel wrap
-  if (ent.x < 0) { ent.x = mapCols - 1; ent.fx = ent.x; }
-  if (ent.x >= mapCols) { ent.x = 0; ent.fx = 0; }
+  if(player.x<0) player.x=mapCols-1;
+  if(player.x>=mapCols) player.x=0;
 }
 
-function moveEnt(ent, ghost, spd) {
-  if (!isAtTileCenter(ent)) {
-    const tx = Math.round(ent.x), ty = Math.round(ent.y);
-    const dx = tx - ent.fx, dy = ty - ent.fy;
-    if (Math.abs(dx) > 0.01) ent.fx += Math.sign(dx) * Math.min(Math.abs(dx), spd);
-    if (Math.abs(dy) > 0.01) ent.fy += Math.sign(dy) * Math.min(Math.abs(dy), spd);
-    if (Math.abs(ent.fx - tx) < 0.05) ent.fx = tx;
-    if (Math.abs(ent.fy - ty) < 0.05) ent.fy = ty;
+function moveEnemy(en, now) {
+  if(en.moveCd>0) { en.moveCd--; return; }
+  if(en.mode==='house') {
+    en.releaseDelay--;
+    if(en.releaseDelay<=0) {
+      // Move out of house
+      en.x=Math.floor(mapCols/2); en.y=Math.floor(mapRows/2)-1;
+      en.mode='chase'; en.dir='up';
+    }
     return;
   }
-  snapToTile(ent);
-  const d = DIR[ent.dir];
-  const nx = wrapX(ent.x + d.dx), ny = ent.y + d.dy;
-  if (walkable(nx, ny, ghost)) {
-    ent.x = nx; ent.y = ny; ent.fx = nx; ent.fy = ny;
-  }
-  if (ent.x < 0) { ent.x = mapCols - 1; ent.fx = ent.x; }
-  if (ent.x >= mapCols) { ent.x = 0; ent.fx = 0; }
-}
-
-// ── Enemy AI ────────────────────────────────────────────────────────────────
-function pickDir(en) {
-  const opp={up:'down',down:'up',left:'right',right:'left'};
-  const dirs=['up','down','left','right'];
-  let best=null, bestD=Infinity;
-  for(const d of dirs) {
-    if(d===opp[en.dir]) continue;
-    const dx=DIR[d].dx, dy=DIR[d].dy;
-    const nx=wrapX(Math.round(en.fx)+dx), ny=Math.round(en.fy)+dy;
-    if(!walkable(nx,ny,true)) continue;
-    let tx,ty;
-    if(en.mode==='frightened') {
-      tx=en.fx+Math.random()*20-10; ty=en.fy+Math.random()*20-10;
+  if(en.mode==='eaten') {
+    // Return to house
+    const hx=Math.floor(mapCols/2), hy=Math.floor(mapRows/2);
+    if(Math.abs(en.x-hx)<=1&&Math.abs(en.y-hy)<=1) {
+      en.mode='house'; en.releaseDelay=100;
     } else {
-      const vr=(Math.random()-.5)*(level*.7);
-      tx=player.fx+DIR[player.dir].dx*4+vr;
-      ty=player.fy+DIR[player.dir].dy*4+vr;
+      // Move toward house
+      const dx=Math.sign(hx-en.x), dy=Math.sign(hy-en.y);
+      if(dx!==0&&tileWalkable(en.x+dx,en.y)) en.x+=dx;
+      else if(dy!==0&&tileWalkable(en.x,en.y+dy)) en.y+=dy;
     }
-    const dist=Math.hypot(nx-tx,ny-ty);
-    if(dist<bestD) { bestD=dist; best=d; }
+    return;
   }
-  return best||en.dir;
+
+  // Speed: frightened = slower
+  const spd=en.mode==='frightened'?3:1;
+  if(tick%spd!==0) return;
+
+  // Choose direction
+  if(en.mode==='frightened') {
+    // Random turn at intersections
+    const opts=[];
+    for(const d of DIRS) {
+      if(d===OPP[en.dir]) continue;
+      if(tileWalkable(en.x+DX[d],en.y+DY[d])) opts.push(d);
+    }
+    if(opts.length>0) en.dir=opts[Math.floor(Math.random()*opts.length)];
+  } else {
+    // Chase — pick direction that minimizes distance to player
+    const opp=OPP[en.dir];
+    let best=null, bestD=Infinity;
+    const variation=(Math.random()-.5)*(level*.5);
+    const tx=player.x+DX[player.dir]*3+variation;
+    const ty=player.y+DY[player.dir]*3+variation;
+    for(const d of DIRS) {
+      if(d===opp) continue;
+      const nx=en.x+DX[d], ny=en.y+DY[d];
+      if(!tileWalkable(nx,ny)) continue;
+      const dist=Math.hypot(nx-tx,ny-ty);
+      if(dist<bestD) { bestD=dist; best=d; }
+    }
+    if(best) en.dir=best;
+  }
+
+  const nx=en.x+DX[en.dir], ny=en.y+DY[en.dir];
+  if(tileWalkable(nx,ny)) {
+    en.x=wrapX(nx); en.y=ny;
+  }
+  if(en.x<0) en.x=mapCols-1;
+  if(en.x>=mapCols) en.x=0;
 }
 
 // ── Collision ───────────────────────────────────────────────────────────────
 function checkCollisions() {
-  const px=player.x, py=player.y;
-  const tile=tileAt(px,py);
+  const tile=tileAt(player.x,player.y);
   if(tile===T_DOT) {
-    map[py][wrapX(px)]=T_PATH;
-    score+=DOT_PTS; dotsEaten++; SFX.eat();
+    map[player.y][player.x]=T_PATH;
+    score+=10; dotsEaten++; SFX.eat();
     checkComplete();
   } else if(tile===T_PWR) {
-    map[py][wrapX(px)]=T_PATH;
-    score+=POWER_PTS; dotsEaten++; setPowerMode(true); SFX.power();
+    map[player.y][player.x]=T_PATH;
+    score+=50; dotsEaten++; powerMode=true; powerTimer=Math.round(5*60);
+    enemies.forEach(e=>{ if(e.mode!=='eaten') e.mode='frightened'; });
+    SFX.power();
     checkComplete();
   }
   updateHUD();
   for(const en of enemies) {
-    if(Math.abs(en.fx-player.fx)<.9 && Math.abs(en.fy-player.fy)<.9) {
-      if(en.mode==='frightened') { en.mode='eaten'; score+=EAT_PTS; SFX.eatGhost(); updateHUD(); }
+    if(en.x===player.x&&en.y===player.y) {
+      if(en.mode==='frightened') { en.mode='eaten'; score+=200; SFX.eatGhost(); updateHUD(); }
       else if(en.mode==='chase') { playerDied(); return; }
     }
   }
@@ -450,41 +428,16 @@ function update() {
       enemies.forEach(e=>{ if(e.mode==='frightened') e.mode='chase'; });
     }
   }
-  enemies.forEach(en=>{
-    if(en.mode==='house') {
-      en.releaseDelay--;
-      if(en.releaseDelay<=0) {
-        en.x=Math.round(mapCols/2); en.y=Math.floor(mapRows/2);
-        en.fx=en.x; en.fy=en.y; en.mode='chase'; en.dir='up';
-      }
-    }
-  });
-  moveTile(player, false);
-  if(tick%2===0) {
-    enemies.forEach(en=>{
-      if(en.mode==='house') return;
-      if(en.mode==='eaten') {
-        const hx=Math.floor(mapCols/2), hy=Math.floor(mapRows/2);
-        if(Math.abs(en.fx-hx)<1&&Math.abs(en.fy-hy)<1) {
-          en.mode='house'; en.releaseDelay=120;
-          en.fx=hx; en.fy=hy; en.x=hx; en.y=hy;
-        } else {
-          en.dir=(en.fx<hx)?'right':(en.fx>hx)?'left':(en.fy<hy)?'down':'up';
-          moveEnt(en, true, ENEMY_SPEED * 2.0);
-        }
-        return;
-      }
-      const spd=en.mode==='frightened'?ENEMY_SPEED*.5:en.speed;
-      en.dir=pickDir(en);
-      moveEnt(en,true,spd);
-    });
-  }
+  const now=performance.now();
+  movePlayer(now);
+  enemies.forEach(en=>moveEnemy(en,now));
   checkCollisions();
 }
 
 // ── Render ─────────────────────────────────────────────────────────────────
 function render() {
-  const ts=tileSize;
+  const ts=Math.floor(canvas.width/mapCols);
+  const WR=TILE-WALL_PAD*2; // wall inner size
   const pw=powerMode&&powerTimer<120&&tick%14<7;
 
   ctx.fillStyle=C.bg;
@@ -493,144 +446,141 @@ function render() {
   // Map
   for(let y=0;y<mapRows;y++) {
     for(let x=0;x<mapCols;x++) {
-      const t=map[y][x];
+      const tile=map[y][x];
       const px=x*ts, py=y*ts;
-      if(t===T_WALL) {
+      if(tile===T_WALL) {
+        // Wall with corridor padding
         ctx.fillStyle=C.wall;
-        ctx.fillRect(px+1,py+1,ts-2,ts-2);
-        ctx.fillStyle=C.wallHi;
-        ctx.fillRect(px+3,py+3,ts-6,ts-6);
-      } else if(t===T_DOT) {
+        ctx.fillRect(px+WALL_PAD,py+WALL_PAD,ts-WALL_PAD*2,ts-WALL_PAD*2);
+        // Inner darker square
+        ctx.fillStyle=C.wallD;
+        const inner=6;
+        ctx.fillRect(px+WALL_PAD+inner,py+WALL_PAD+inner,ts-WALL_PAD*2-inner*2,ts-WALL_PAD*2-inner*2);
+      } else if(tile===T_DOT) {
         ctx.fillStyle=C.dot;
-        ctx.beginPath(); ctx.arc(px+ts/2,py+ts/2,ts*.13,0,Math.PI*2); ctx.fill();
-      } else if(t===T_PWR) {
-        const pl=Math.sin(tick*.12)*.22+.78;
+        ctx.beginPath();
+        ctx.arc(px+ts/2,py+ts/2,DOT_R*(ts/40),0,Math.PI*2);
+        ctx.fill();
+      } else if(tile===T_PWR) {
+        const pl=Math.sin(tick*.12)*.2+.8;
         ctx.fillStyle=C.power;
-        ctx.shadowBlur=10; ctx.shadowColor=C.power;
-        ctx.beginPath(); ctx.arc(px+ts/2,py+ts/2,ts*.26*pl,0,Math.PI*2); ctx.fill();
+        ctx.shadowBlur=12; ctx.shadowColor=C.power;
+        ctx.beginPath();
+        ctx.arc(px+ts/2,py+ts/2,POWER_R*(ts/40)*pl,0,Math.PI*2);
+        ctx.fill();
         ctx.shadowBlur=0;
-      } else if(t===T_HOUS) {
-        ctx.fillStyle='#150a28'; ctx.fillRect(px,py,ts,ts);
+      } else if(tile===T_HOUS) {
+        ctx.fillStyle=C.house;
+        ctx.fillRect(px,py,ts,ts);
       }
     }
   }
 
-  // Enemies
+  // Ghosts
   for(const en of enemies) {
-    const ex=en.fx*ts+ts/2, ey=en.fy*ts+ts/2, r=ts*.36;
-    if(en.mode==='eaten') { drawEyes(ex,ey,r*.65,en.dir); continue; }
+    const ex=en.x*ts+ts/2, ey=en.y*ts+ts/2, r=GHOST_R*(ts/40);
+    if(en.mode==='eaten') { drawGEyes(ex,ey,r*.6,en.dir); continue; }
     let col=en.color;
     if(en.mode==='frightened') col=pw?'#eee':'#2244ff';
     ctx.fillStyle=col;
-    ctx.shadowBlur=8; ctx.shadowColor=col;
+    ctx.shadowBlur=6; ctx.shadowColor=col;
     ctx.beginPath();
-    ctx.arc(ex,ey-r*.12,r,Math.PI,0,false);
-    ctx.lineTo(ex+r,ey+r*.55);
-    const wv=Math.sin(tick*.22)*r*.12;
-    for(let i=3;i>=-3;i--) ctx.lineTo(ex+i*(r*.32),ey+r*.55+(i%2===0?r*.38+wv:0));
+    ctx.arc(ex,ey-r*.1,r,Math.PI,0,false);
+    ctx.lineTo(ex+r,ey+r*.5);
+    const wv=Math.sin(tick*.25)*r*.1;
+    for(let i=3;i>=-3;i--) ctx.lineTo(ex+i*(r*.32),ey+r*.5+(i%2===0?r*.35+wv:0));
     ctx.closePath(); ctx.fill();
     ctx.shadowBlur=0;
     if(en.mode==='frightened') {
       ctx.fillStyle='#fff';
-      ctx.fillRect(ex-r*.52,ey-r*.22,r*.22,r*.22);
-      ctx.fillRect(ex+r*.3,ey-r*.22,r*.22,r*.22);
-      ctx.fillRect(ex-r*.38,ey+r*.12,r*.76,r*.18);
+      ctx.fillRect(ex-r*.5,ey-r*.2,r*.18,r*.18);
+      ctx.fillRect(ex+r*.3,ey-r*.2,r*.18,r*.18);
+      ctx.fillRect(ex-r*.35,ey+r*.12,r*.7,r*.15);
     } else {
-      drawEyes(ex,ey,r,en.dir);
+      drawGEyes(ex,ey,r,en.dir);
     }
   }
 
   // Player
-  const px=player.fx*ts+ts/2, py=player.fy*ts+ts/2, pr=ts*.38;
-  const ma=Math.abs(Math.sin(player.mouth))*.32;
+  const px=player.x*ts+ts/2, py=player.y*ts+ts/2, pr=PLAYER_R*(ts/40);
+  const ma=Math.abs(Math.sin(player.mouth))*.3;
   player.mouth=(player.mouth+.22)%Math.PI;
   ctx.fillStyle=C.player;
-  ctx.shadowBlur=14; ctx.shadowColor=C.player;
+  ctx.shadowBlur=12; ctx.shadowColor=C.player;
   ctx.beginPath();
   const ba={right:0,down:Math.PI/2,left:Math.PI,up:-Math.PI/2}[player.dir]||0;
   ctx.arc(px,py,pr,ba+ma,ba+Math.PI*2-ma); ctx.lineTo(px,py); ctx.closePath(); ctx.fill();
   ctx.shadowBlur=0;
-  const eo=DIR[player.dir];
+  const eo={up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]}[player.dir]||[0,0];
   ctx.fillStyle='#222';
-  ctx.beginPath(); ctx.arc(px+eo.dx*pr*.28,py+eo.dy*pr*.28-pr*.14,pr*.13,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(px+eo[0]*pr*.28,py+eo[1]*pr*.28-pr*.12,pr*.12,0,Math.PI*2); ctx.fill();
 }
 
-function drawEyes(ex,ey,r,dir) {
+function drawGEyes(ex,ey,r,dir) {
   ctx.fillStyle='#fff';
-  ctx.beginPath(); ctx.ellipse(ex-r*.3,ey-r*.18,r*.26,r*.3,0,0,Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.ellipse(ex+r*.3,ey-r*.18,r*.26,r*.3,0,0,Math.PI*2); ctx.fill();
-  const o={up:[0,-.2],down:[0,.1],left:[-.2,0],right:[.2,0]}[dir]||[0,0];
-  ctx.fillStyle='#0055ff';
-  ctx.beginPath(); ctx.arc(ex-r*.3+o[0]*r,ey-r*.18+o[1]*r,r*.14,0,Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.arc(ex+r*.3+o[0]*r,ey-r*.18+o[1]*r,r*.14,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(ex-r*.28,ey-r*.18,r*.24,r*.28,0,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(ex+r*.28,ey-r*.18,r*.24,r*.28,0,0,Math.PI*2); ctx.fill();
+  const o={up:[0,-.18],down:[0,.1],left:[-.18,0],right:[.18,0]}[dir]||[0,0];
+  ctx.fillStyle='#0044cc';
+  ctx.beginPath(); ctx.arc(ex-r*.28+o[0]*r,ey-r*.18+o[1]*r,r*.12,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(ex+r*.28+o[0]*r,ey-r*.18+o[1]*r,r*.12,0,Math.PI*2); ctx.fill();
 }
 
 // ── Game Loop ───────────────────────────────────────────────────────────────
 function loop() {
-  update();
-  render();
+  update(); render();
   animID=requestAnimationFrame(loop);
 }
 
 // ── Input ───────────────────────────────────────────────────────────────────
 // Keyboard
-document.addEventListener('keydown', e => {
+document.addEventListener('keydown',e=>{
   const m={'ArrowUp':'up','ArrowDown':'down','ArrowLeft':'left','ArrowRight':'right',
            'w':'up','s':'down','a':'left','d':'right'};
-  const dir=m[e.key];
-  if(dir) { e.preventDefault(); player.nextDir=dir; }
+  if(m[e.key]) { e.preventDefault(); player.nextDir=m[e.key]; }
   if(state==='start'&&(e.key===' '||e.key==='Enter')) { e.preventDefault(); startGame(); }
   if(state==='game'&&(e.key==='Escape'||e.key==='p'||e.key==='P')) togglePause();
 });
 
+// Touch detection
+(function(){ if('ontouchstart' in window||navigator.maxTouchPoints>0) document.body.classList.add('game-active'); })();
+
 // Double-tap zoom prevention
 let lastTap=0;
-document.addEventListener('touchend', function(e) {
+document.addEventListener('touchend',function(e){
   const now=Date.now();
   if(now-lastTap<350) e.preventDefault();
   lastTap=now;
-}, {passive:false});
-
-// Canvas swipe
-let tx=0, ty=0;
-canvas.addEventListener('touchstart', e=>{ e.preventDefault(); tx=e.touches[0].clientX; ty=e.touches[0].clientY; },{passive:false});
-canvas.addEventListener('touchend', e=>{
-  e.preventDefault();
-  const dx=e.changedTouches[0].clientX-tx, dy=e.changedTouches[0].clientY-ty;
-  if(Math.abs(dx)<12&&Math.abs(dy)<12) {
-    if(state==='game') {
-      // Tap canvas = nothing (overlay handles start)
-    }
-    return;
-  }
-  player.nextDir=Math.abs(dx)>Math.abs(dy)?(dx>0?'right':'left'):(dy>0?'down':'up');
-  if(state==='game') showOverlay('','');
 },{passive:false});
 
-// Action buttons
+// Canvas swipe
+let tx=0,ty=0;
+canvas.addEventListener('touchstart',e=>{ e.preventDefault(); tx=e.touches[0].clientX; ty=e.touches[0].clientY; },{passive:false});
+canvas.addEventListener('touchend',e=>{
+  e.preventDefault();
+  const dx=e.changedTouches[0].clientX-tx, dy=e.changedTouches[0].clientY-ty;
+  if(Math.abs(dx)<12&&Math.abs(dy)<12) return;
+  player.nextDir=Math.abs(dx)>Math.abs(dy)?(dx>0?'right':'left'):(dy>0?'down':'up');
+  if(state==='start') startGame();
+},{passive:false});
+
 $('btn-pause').addEventListener('click',()=>{ if(state==='game') togglePause(); });
 $('btn-pause').addEventListener('touchstart',e=>{ e.preventDefault(); if(state==='game') togglePause(); },{passive:false});
 
-// Overlay click to resume from level-start overlay
-$('overlay-msg').addEventListener('click',()=>{
-  $('overlay-msg').classList.add('hidden');
-});
+$('overlay-msg').addEventListener('click',()=>$('overlay-msg').classList.add('hidden'));
 
 function togglePause() {
-  if(state==='game') { showScreen('pause'); }
-  else if(state==='pause') { showScreen('game'); }
+  if(state==='game') showScreen('pause');
+  else if(state==='pause') showScreen('game');
 }
 
 // ── Menu Buttons ────────────────────────────────────────────────────────────
-$('btn-start').addEventListener('click', startGame);
+$('btn-start').addEventListener('click',startGame);
 $('btn-start').addEventListener('touchstart',e=>{ e.preventDefault(); startGame(); },{passive:false});
-
-$('btn-howto').addEventListener('click', ()=>showScreen('howto'));
-$('btn-back').addEventListener('click', ()=>showScreen('start'));
-
+$('btn-howto').addEventListener('click',()=>showScreen('howto'));
+$('btn-back').addEventListener('click',()=>showScreen('start'));
 $('btn-resume').addEventListener('click',()=>showScreen('game'));
-$('btn-restart').addEventListener('click',()=>{ showScreen('game'); startGame(); });
-$('btn-retry').addEventListener('click',()=>startGame());
+$('btn-retry').addEventListener('click',startGame);
 $('btn-menu').addEventListener('click',()=>{ updateHUD(); showScreen('start'); });
 
 // ── Init ────────────────────────────────────────────────────────────────────
