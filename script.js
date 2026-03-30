@@ -119,7 +119,6 @@ const screens = {
 };
 const canvas = $('game-canvas');
 const ctx    = canvas.getContext('2d');
-const dpad   = $('dpad');
 const $hsStart = $('hs-start');
 
 // ── Game State ─────────────────────────────────────────────────────────────
@@ -525,13 +524,6 @@ document.addEventListener('keydown', e => {
   if(state==='game'&&(e.key==='Escape'||e.key==='p'||e.key==='P')) togglePause();
 });
 
-// Touch detection
-(function() {
-  if('ontouchstart' in window||navigator.maxTouchPoints>0) {
-    dpad.classList.add('touch-active');
-  }
-})();
-
 // Double-tap zoom prevention
 let lastTap=0;
 document.addEventListener('touchend', function(e) {
@@ -555,17 +547,6 @@ canvas.addEventListener('touchend', e=>{
   player.nextDir=Math.abs(dx)>Math.abs(dy)?(dx>0?'right':'left'):(dy>0?'down':'up');
   if(state==='game') showOverlay('','');
 },{passive:false});
-
-// D-Pad buttons
-document.querySelectorAll('[data-dir]').forEach(btn=>{
-  const h=(e)=>{ e.preventDefault(); player.nextDir=btn.dataset.dir; btn.classList.add('active'); };
-  const rh=()=>btn.classList.remove('active');
-  btn.addEventListener('touchstart',h,{passive:false});
-  btn.addEventListener('mousedown',h);
-  btn.addEventListener('touchend',rh);
-  btn.addEventListener('mouseup',rh);
-  btn.addEventListener('mouseleave',rh);
-});
 
 // Action buttons
 $('btn-pause').addEventListener('click',()=>{ if(state==='game') togglePause(); });
