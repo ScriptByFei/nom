@@ -154,7 +154,6 @@ html, body {
 /* ── HUD ───────────────────────────────────────────────────────────────── */
 #game-screen {
   background: transparent;
-}
   justify-content: flex-start;
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -300,12 +299,9 @@ body.game-active #action-row { display: block; }
 /* ── Canvas canvas sizing ─────────────────────────────────────────────── */
 canvas {
   border-radius: 4px;
-  width: min(560px, 95vw) !important;
-  height: auto !important;
-  aspect-ratio: 15/13;
-  max-height: 70vh;
   display: block;
-  /* Fallback: guarantee canvas is visible even if JS fails */
-  background: #9966ff !important;
-  min-width: 280px;
+  /* JS sizes this, but CSS ensures it's never invisible */
+  width: min(560px, 95vw);
+  height: auto;
+  aspect-ratio: 15 / 13;
 }

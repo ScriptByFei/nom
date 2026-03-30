@@ -597,5 +597,7 @@ $('btn-retry').addEventListener('click',startGame);
 $('btn-menu').addEventListener('click',()=>{ updateHUD(); showScreen('start'); });
 
 // ── Init ────────────────────────────────────────────────────────────────────
+initMap(1);
+resizeCanvas();
 updateHUD();
 showScreen('start');
