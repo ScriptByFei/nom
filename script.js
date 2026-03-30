@@ -205,7 +205,7 @@ function findSpawn() {
 
 function initPlayer() {
   const sp=findSpawn();
-  player={x:sp.x,y:sp.y,dir:'left',nextDir:'left',mouth:0,moveCd:0};
+  player={x:sp.x,y:sp.y,dir:'left',nextDir:'left',mouth:0};
 }
 
 function initEnemies() {
@@ -224,7 +224,7 @@ function initEnemies() {
       mode: i===0?'chase':'house',
       releaseDelay: i*160,
       frightenedTimer:0,
-      moveCd:0,
+      _lastMove:0,
     });
   }
 }
@@ -309,10 +309,10 @@ function tryBufferedTurn(ent) {
 }
 
 function movePlayer(now) {
-  if(player.moveCd>0) { player.moveCd--; return; }
-  const nowSpd=Math.max(8,14-level*1.5); // faster on higher levels
-  if(now-lastMoveTime<nowSpd) return;
-  lastMoveTime=now;
+  // Speed: 180ms base at level 1, faster on higher levels (min 90ms)
+  const nowSpd = Math.max(90, 180 - level * 15);
+  if(now - lastMoveTime < nowSpd) return;
+  lastMoveTime = now;
 
   // Try buffered direction first
   tryBufferedTurn(player);
@@ -328,7 +328,6 @@ function movePlayer(now) {
 }
 
 function moveEnemy(en, now) {
-  if(en.moveCd>0) { en.moveCd--; return; }
   if(en.mode==='house') {
     en.releaseDelay--;
     if(en.releaseDelay<=0) {
@@ -352,9 +351,11 @@ function moveEnemy(en, now) {
     return;
   }
 
-  // Speed: frightened = slower
-  const spd=en.mode==='frightened'?3:1;
-  if(tick%spd!==0) return;
+  // Time-based: enemies slower than player
+  const baseSpd = Math.max(90, 200 - level * 12);
+  const enSpd   = en.mode === 'frightened' ? baseSpd * 1.8 : baseSpd * 0.9;
+  if(now - (en._lastMove || 0) < enSpd) return;
+  en._lastMove = now;
 
   // Choose direction
   if(en.mode==='frightened') {
@@ -541,9 +542,6 @@ document.addEventListener('keydown',e=>{
   if(state==='start'&&(e.key===' '||e.key==='Enter')) { e.preventDefault(); startGame(); }
   if(state==='game'&&(e.key==='Escape'||e.key==='p'||e.key==='P')) togglePause();
 });
-
-// Touch detection
-(function(){ if('ontouchstart' in window||navigator.maxTouchPoints>0) document.body.classList.add('game-active'); })();
 
 // Double-tap zoom prevention
 let lastTap=0;
