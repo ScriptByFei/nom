@@ -23,8 +23,8 @@ const T_WALL = 1, T_PATH = 0, T_DOT = 2, T_PWR = 3, T_HOUS = 4;
 // Colors
 const C = {
   bg:    '#0a0a18',
-  wall:  '#5533cc',
-  wallD: '#3311aa',
+  wall:  '#9966ff',   // Brighter purple — visible on dark bg
+  wallD: '#7755dd',   // Slightly darker inner
   dot:   '#ffdd44',
   power: '#00ffcc',
   player:'#ffee00',
@@ -444,7 +444,6 @@ function update() {
 // ── Render ─────────────────────────────────────────────────────────────────
 function render() {
   const ts=Math.floor(canvas.width/mapCols);
-  const WR=TILE-WALL_PAD*2; // wall inner size
   const pw=powerMode&&powerTimer<120&&tick%14<7;
 
   ctx.fillStyle=C.bg;
@@ -456,19 +455,25 @@ function render() {
       const tile=map[y][x];
       const px=x*ts, py=y*ts;
       if(tile===T_WALL) {
-        // Wall with corridor padding
+        // Wall — bright purple, always visible
         ctx.fillStyle=C.wall;
-        ctx.fillRect(px+WALL_PAD,py+WALL_PAD,ts-WALL_PAD*2,ts-WALL_PAD*2);
-        // Inner darker square
+        ctx.fillRect(px,py,ts,ts);
         ctx.fillStyle=C.wallD;
-        const inner=6;
-        ctx.fillRect(px+WALL_PAD+inner,py+WALL_PAD+inner,ts-WALL_PAD*2-inner*2,ts-WALL_PAD*2-inner*2);
+        ctx.fillRect(px+3,py+3,ts-6,ts-6);
       } else if(tile===T_DOT) {
+        // Path bg
+        ctx.fillStyle='#0c0c20';
+        ctx.fillRect(px,py,ts,ts);
+        // Dot
         ctx.fillStyle=C.dot;
         ctx.beginPath();
         ctx.arc(px+ts/2,py+ts/2,DOT_R*(ts/40),0,Math.PI*2);
         ctx.fill();
       } else if(tile===T_PWR) {
+        // Path bg
+        ctx.fillStyle='#0c0c20';
+        ctx.fillRect(px,py,ts,ts);
+        // Power pellet
         const pl=Math.sin(tick*.12)*.2+.8;
         ctx.fillStyle=C.power;
         ctx.shadowBlur=12; ctx.shadowColor=C.power;
@@ -478,6 +483,10 @@ function render() {
         ctx.shadowBlur=0;
       } else if(tile===T_HOUS) {
         ctx.fillStyle=C.house;
+        ctx.fillRect(px,py,ts,ts);
+      } else {
+        // Empty path — still draw bg so corridors are visible
+        ctx.fillStyle='#0c0c20';
         ctx.fillRect(px,py,ts,ts);
       }
     }
