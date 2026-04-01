@@ -21,6 +21,7 @@
   <div class="menu-btns">
     <button id="btn-start" class="arcade-btn">PLAY</button>
     <button id="btn-howto" class="arcade-btn secondary">HOW TO PLAY</button>
+    <button id="btn-lb-menu" class="arcade-btn secondary">LEADERBOARD</button>
   </div>
   <div class="highscore-display">
     <span class="hs-label">HIGHSCORE</span>
@@ -66,6 +67,13 @@
     <div id="overlay-msg" class="overlay hidden"></div>
   </div>
 
+  <!-- Virtual Joystick (touch devices only) -->
+  <div id="joystick-container">
+    <div id="joystick-base">
+      <div id="joystick-knob"></div>
+    </div>
+  </div>
+
 </div>
 
 <!-- Fixed Touch Controls (always on top, outside screen divs) -->
@@ -95,12 +103,34 @@
       <div class="go-value gold" id="go-high">0</div>
     </div>
     <div class="new-record hidden" id="new-record">★ NEW RECORD ★</div>
+    <div id="submit-score-wrap" class="hidden">
+      <div class="go-label" style="margin-top:8px">SUBMIT TO LEADERBOARD</div>
+      <input type="text" id="lb-nick" maxlength="3" placeholder="AAA" class="lb-nick-input"/>
+      <button id="btn-submit-score" class="arcade-btn" style="margin-top:6px">SUBMIT</button>
+    </div>
     <button id="btn-retry" class="arcade-btn">PLAY AGAIN</button>
     <button id="btn-menu"  class="arcade-btn secondary">MENU</button>
+    <button id="btn-leaderboard" class="arcade-btn secondary" style="margin-top:6px">LEADERBOARD</button>
   </div>
 </div>
 
-<script src="script.js?v=5"></script>
+<!-- Leaderboard Screen -->
+<div id="leaderboard-screen" class="screen">
+  <div class="lb-box">
+    <div class="lb-title">★ LEADERBOARD ★</div>
+    <div class="lb-subtitle">TOP 10 PLAYERS</div>
+    <table class="lb-table">
+      <thead>
+        <tr><th>#</th><th>NAME</th><th>SCORE</th><th>LVL</th></tr>
+      </thead>
+      <tbody id="lb-tbody">
+      </tbody>
+    </table>
+    <button id="btn-lb-back" class="arcade-btn">BACK</button>
+  </div>
+</div>
+
+<script src="script.js?v=6"></script>
 <script>
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js?v=5').catch(function(e) {
