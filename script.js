@@ -253,15 +253,15 @@ function tone(f, d, t = 'square', v = .10) {
 const SFX = {
   // Waka-waka: alternate between two tones for eating dots
   _wakaTone:false,
-  eat:()=>{ SFX._wakaTone=!SFX._wakaTone; tone(SFX._wakaTone?620:500,.04,.08); },
+  eat:()=>{ SFX._wakaTone=!SFX._wakaTone; tone(SFX._wakaTone?620:500,.04,'square',.08); },
   power:()=>{ tone(380,.08,'sawtooth',.12); setTimeout(()=>tone(700,.12,'sawtooth',.12),70); },
   // Ghost eaten: higher pitch based on combo (resets when player dies)
-  eatGhost:()=>{ ghostEatCombo++; const baseFreq=900+Math.min(ghostEatCombo,4)*150; tone(baseFreq,.07,.12); setTimeout(()=>tone(baseFreq*1.33,.1,.12),55); },
+  eatGhost:()=>{ ghostEatCombo++; const baseFreq=900+Math.min(ghostEatCombo,4)*150; tone(baseFreq,.07,'square',.12); setTimeout(()=>tone(baseFreq*1.33,.1,'square',.12),55); },
   die:()=>{ tone(300,.1,'sawtooth',.15); setTimeout(()=>tone(200,.18,'sawtooth',.12),110); setTimeout(()=>tone(150,.28,'sawtooth',.1),260); ghostEatCombo=0; },
   // Extra life: ascending arpeggio
-  extraLife:()=>{ [262,330,392,523,659].forEach((f,i)=>setTimeout(()=>tone(f,.15,.12,.18),i*70)); },
+  extraLife:()=>{ [262,330,392,523,659].forEach((f,i)=>setTimeout(()=>tone(f,.15,'square',.12),i*70)); },
   // Level complete fanfare (extended)
-  levelUp:()=>{ [523,659,784,1047,1319,1568].forEach((f,i)=>setTimeout(()=>tone(f,.13,.12),i*80)); },
+  levelUp:()=>{ [523,659,784,1047,1319,1568].forEach((f,i)=>setTimeout(()=>tone(f,.13,'square',.12),i*80)); },
   // Fruit eaten: ascending cheerful tone
   fruitEat:()=>{ tone(880,.08,'sine',.14); setTimeout(()=>tone(1100,.1,'sine',.12),60); setTimeout(()=>tone(1320,.12,'sine',.1),130); },
 };
