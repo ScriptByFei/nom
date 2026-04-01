@@ -491,7 +491,7 @@ function resizeCanvas() {
   const wrap=$('canvas-wrap');
   const ww=wrap.clientWidth-4, wh=wrap.clientHeight-4;
   const maxW=Math.floor(ww/mapCols), maxH=Math.floor(wh/mapRows);
-  const ts=Math.min(maxW,maxH,44);
+  const ts=Math.min(maxW,maxH,56);
   canvas.width=mapCols*ts; canvas.height=mapRows*ts;
   canvas.style.width=canvas.width+'px'; canvas.style.height=canvas.height+'px';
   return ts;
