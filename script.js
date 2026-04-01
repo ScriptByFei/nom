@@ -178,6 +178,11 @@ const screens = {
 };
 const canvas = $('game-canvas');
 const ctx    = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+// Map canvas cache for performance
+const mapCanvas = document.createElement('canvas');
+let mapCacheDirty = true;
 
 // ── Game State ─────────────────────────────────────────────────────────────
 let score=0, lives=START_LIVES, level=1;
@@ -189,7 +194,7 @@ let lastMoveTime=0;
 let animID=null, tick=0;
 let state='start';
 
-// ── Audio ──────────────────────────────────────────────────────────────────
+// ── Audio ───────────────────────────────────────────────────────────────────
 let _ac=null;
 let musicEnabled=true;
 let bgMusicInterval=null;
@@ -197,17 +202,52 @@ let bgMusicOsc=null;
 let ghostEatCombo=0;
 let lastExtraLifeScore=0;
 
-const ac = () => { if(!_ac) try{ _ac=new(window.AudioContext||window.webkitAudioContext)(); }catch(e){} return _ac; };
+// Initialize AudioContext on first user interaction (mobile browser requirement)
+function initAudio() {
+  if(!_ac) {
+    try {
+      _ac = new (window.AudioContext || window.webkitAudioContext)();
+    } catch(e) {
+      return false;
+    }
+  }
+  // Resume if suspended (mobile browsers start in suspended state)
+  if(_ac.state === 'suspended') {
+    _ac.resume();
+  }
+  return true;
+}
 
-function tone(f,d,t='square',v=.10) {
-  try { const a=ac(); if(!a) return;
-    const o=a.createOscillator(),g=a.createGain();
-    o.connect(g); g.connect(a.destination);
-    o.type=t; o.frequency.value=f;
-    g.gain.value=v;
-    g.gain.exponentialRampToValueAtTime(.001,a.currentTime+d);
-    o.start(a.currentTime); o.stop(a.currentTime+d);
-  } catch(e){}
+// Get ready-to-use AudioContext (creates if needed, resumes if suspended)
+const ac = () => {
+  if(!_ac) {
+    try {
+      _ac = new (window.AudioContext || window.webkitAudioContext)();
+    } catch(e) {
+      return null;
+    }
+  }
+  if(_ac.state === 'suspended') {
+    _ac.resume();
+  }
+  return _ac;
+};
+
+// Optimized tone function - accepts optional volume override
+function tone(f, d, t = 'square', v = .10) {
+  const a = ac();
+  if(!a) return;
+  try {
+    const o = a.createOscillator(), g = a.createGain();
+    o.connect(g);
+    g.connect(a.destination);
+    o.type = t;
+    o.frequency.value = f;
+    g.gain.value = v;
+    g.gain.exponentialRampToValueAtTime(.001, a.currentTime + d);
+    o.start(a.currentTime);
+    o.stop(a.currentTime + d);
+  } catch(e) {}
 }
 
 const SFX = {
@@ -255,7 +295,8 @@ function toggleMusic() {
   if(btn) btn.textContent=musicEnabled?'🔊':'🔇';
   if(musicEnabled) startBackgroundMusic(); else stopBackgroundMusic();
 }
-function initAudio() {
+// Create mute button UI element
+function createMuteButton() {
   if(document.getElementById('muteBtn')) return;
   const btn=document.createElement('button');
   btn.id='muteBtn'; btn.textContent='🔊';
@@ -403,6 +444,7 @@ function initMap(lvl) {
   dotsTotal=0; dotsEaten=0;
   for(let y=0;y<mapRows;y++) for(let x=0;x<mapCols;x++)
     if(map[y][x]===T_DOT||map[y][x]===T_PWR) dotsTotal++;
+  mapCacheDirty = true;
 }
 
 function tileWalkable(x,y) {
@@ -500,7 +542,8 @@ function startGame() {
   lastMoveTime=0; // reset so first move is immediate
   ghostEatCombo=0;
   currentFruit=null; fruitActive=false; fruitTimer=Math.floor(30+Math.random()*30)*60; // 30-60 sec
-  initAudio();
+  createMuteButton();
+  initAudio(); // Initialize/resume AudioContext on user interaction
   loadLevel();
   showScreen('game');
   startBackgroundMusic();
@@ -711,12 +754,14 @@ function checkCollisions() {
   if(tile===T_DOT) {
     map[player.y][player.x]=T_PATH;
     score+=10; dotsEaten++; SFX.eat();
+    mapCacheDirty = true;
     checkComplete();
   } else if(tile===T_PWR) {
     map[player.y][player.x]=T_PATH;
     score+=50; dotsEaten++; powerMode=true; powerTimer=Math.round(5*60);
     enemies.forEach(e=>{ if(e.mode!=='eaten') e.mode='frightened'; });
     SFX.power();
+    mapCacheDirty = true;
     checkComplete();
   }
   // Fruit collision
@@ -786,48 +831,57 @@ function render() {
   ctx.fillStyle=C.bg;
   ctx.fillRect(0,0,canvas.width,canvas.height);
 
-  // Map
-  for(let y=0;y<mapRows;y++) {
-    for(let x=0;x<mapCols;x++) {
-      const tile=map[y][x];
-      const px=x*ts, py=y*ts;
-      if(tile===T_WALL) {
-        // Wall — bright purple, always visible
-        ctx.fillStyle=C.wall;
-        ctx.fillRect(px,py,ts,ts);
-        ctx.fillStyle=C.wallD;
-        ctx.fillRect(px+3,py+3,ts-6,ts-6);
-      } else if(tile===T_DOT) {
-        // Path bg — dark blue so corridors are visible
-        ctx.fillStyle='#1e1e3a';
-        ctx.fillRect(px,py,ts,ts);
-        // Dot
-        ctx.fillStyle=C.dot;
-        ctx.beginPath();
-        ctx.arc(px+ts/2,py+ts/2,DOT_R*(ts/40),0,Math.PI*2);
-        ctx.fill();
-      } else if(tile===T_PWR) {
-        // Path bg
-        ctx.fillStyle='#1e1e3a';
-        ctx.fillRect(px,py,ts,ts);
-        // Power pellet
-        const pl=Math.sin(tick*.12)*.2+.8;
-        ctx.fillStyle=C.power;
-        ctx.shadowBlur=12; ctx.shadowColor=C.power;
-        ctx.beginPath();
-        ctx.arc(px+ts/2,py+ts/2,POWER_R*(ts/40)*pl,0,Math.PI*2);
-        ctx.fill();
-        ctx.shadowBlur=0;
-      } else if(tile===T_HOUS) {
-        ctx.fillStyle=C.house;
-        ctx.fillRect(px,py,ts,ts);
-      } else {
-        // Empty path — visible dark blue
-        ctx.fillStyle='#1e1e3a';
-        ctx.fillRect(px,py,ts,ts);
+  // Map (cached - only redraw when dirty)
+  if(mapCacheDirty) {
+    mapCanvas.width = canvas.width;
+    mapCanvas.height = canvas.height;
+    const mctx = mapCanvas.getContext('2d');
+    mctx.imageSmoothingEnabled = false;
+    mctx.fillStyle=C.bg;
+    mctx.fillRect(0,0,mapCanvas.width,mapCanvas.height);
+    for(let y=0;y<mapRows;y++) {
+      for(let x=0;x<mapCols;x++) {
+        const tile=map[y][x];
+        const px=x*ts, py=y*ts;
+        if(tile===T_WALL) {
+          // Wall — bright purple, always visible
+          mctx.fillStyle=C.wall;
+          mctx.fillRect(px,py,ts,ts);
+          mctx.fillStyle=C.wallD;
+          mctx.fillRect(px+3,py+3,ts-6,ts-6);
+        } else if(tile===T_DOT) {
+          // Path bg — dark blue so corridors are visible
+          mctx.fillStyle='#1e1e3a';
+          mctx.fillRect(px,py,ts,ts);
+          // Dot
+          mctx.fillStyle=C.dot;
+          mctx.beginPath();
+          mctx.arc(px+ts/2,py+ts/2,DOT_R*(ts/40),0,Math.PI*2);
+          mctx.fill();
+        } else if(tile===T_PWR) {
+          // Path bg
+          mctx.fillStyle='#1e1e3a';
+          mctx.fillRect(px,py,ts,ts);
+          // Power pellet (static, no animation in cache)
+          mctx.fillStyle=C.power;
+          mctx.shadowBlur=12; mctx.shadowColor=C.power;
+          mctx.beginPath();
+          mctx.arc(px+ts/2,py+ts/2,POWER_R*(ts/40),0,Math.PI*2);
+          mctx.fill();
+          mctx.shadowBlur=0;
+        } else if(tile===T_HOUS) {
+          mctx.fillStyle=C.house;
+          mctx.fillRect(px,py,ts,ts);
+        } else {
+          // Empty path — visible dark blue
+          mctx.fillStyle='#1e1e3a';
+          mctx.fillRect(px,py,ts,ts);
+        }
       }
     }
+    mapCacheDirty = false;
   }
+  ctx.drawImage(mapCanvas, 0, 0);
 
   // Fruit rendering (drawn over path tiles, before player/ghosts)
   if(fruitActive&&currentFruit) {
@@ -1077,7 +1131,7 @@ $('overlay-msg').addEventListener('click',()=>$('overlay-msg').classList.add('hi
 
 function togglePause() {
   if(state==='game') { showScreen('pause'); pauseBackgroundMusic(); }
-  else if(state==='pause') { showScreen('game'); resumeBackgroundMusic(); }
+  else if(state==='pause') { initAudio(); showScreen('game'); resumeBackgroundMusic(); }
 }
 
 // ── Menu Buttons ────────────────────────────────────────────────────────────
