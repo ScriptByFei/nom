@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-title" content="NOM">
   <title>NOM — Maze Chase</title>
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css?v=5">
+  <link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
 
@@ -40,7 +40,7 @@
     <div class="howto-item"><span class="howto-icon dpad-icon">D</span> Use D-Pad to move</div>
     <div class="howto-item"><span class="howto-icon">⇄</span> Swipe also works</div>
     <div class="howto-levels">
-      <div class="level-info">4 LEVELS</div>
+      <div class="level-info">7 LEVELS</div>
       <div class="level-info dim">Each harder than the last</div>
     </div>
     <button id="btn-back" class="arcade-btn">BACK</button>
@@ -57,14 +57,15 @@
   </div>
 
   <div id="lives-row">
-    <div class="life-dot" id="life-1"></div>
-    <div class="life-dot" id="life-2"></div>
-    <div class="life-dot" id="life-3"></div>
+    <div class="life-icon" id="life-1"></div>
+    <div class="life-icon" id="life-2"></div>
+    <div class="life-icon" id="life-3"></div>
   </div>
 
   <div id="canvas-wrap">
     <canvas id="game-canvas" width="600" height="520"></canvas>
     <div id="overlay-msg" class="overlay hidden"></div>
+    <div id="power-mode-indicator">POWER!</div>
   </div>
 
   <!-- Virtual Joystick (touch devices only) -->
@@ -118,7 +119,7 @@
 <div id="leaderboard-screen" class="screen">
   <div class="lb-box">
     <div class="lb-title">★ LEADERBOARD ★</div>
-    <div class="lb-subtitle">TOP 10 PLAYERS</div>
+    <div class="lb-subtitle">TOP 10 LOCAL PLAYERS</div>
     <table class="lb-table">
       <thead>
         <tr><th>#</th><th>NAME</th><th>SCORE</th><th>LVL</th></tr>
@@ -130,10 +131,10 @@
   </div>
 </div>
 
-<script src="script.js?v=6"></script>
+<script src="script.js?v=8"></script>
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js?v=5').catch(function(e) {
+  navigator.serviceWorker.register('./sw.js?v=6').catch(function(e) {
     console.warn('SW registration failed:', e);
   });
 }

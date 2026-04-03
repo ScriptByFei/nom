@@ -190,9 +190,17 @@ let map=[], mapRows=0, mapCols=0;
 let dotsTotal=0, dotsEaten=0;
 let player={}, enemies=[];
 let powerMode=false, powerTimer=0;
+// Ghost eaten animation state
+let ghostEatenFlash = false;
+let ghostEatenTimer = 0;
+const GHOST_EATEN_FLASH_FRAMES = 20; // frames for flash effect
 let lastMoveTime=0;
 let animID=null, tick=0;
 let state='start';
+// Death animation state
+let deathAnim = false;
+let deathFrame = 0;
+const DEATH_FRAMES = 90; // ~1.5 seconds at 60fps
 
 // ── Audio ───────────────────────────────────────────────────────────────────
 let _ac=null;
@@ -300,7 +308,7 @@ function createMuteButton() {
   if(document.getElementById('muteBtn')) return;
   const btn=document.createElement('button');
   btn.id='muteBtn'; btn.textContent='🔊';
-  btn.style.cssText='position:fixed;top:10px;right:10px;z-index:1000;background:rgba(0,0,0,.5);border:1px solid #fff;border-radius:5px;color:#fff;padding:5px 10px;cursor:pointer;font-size:16px;';
+  btn.style.cssText='position:fixed;bottom:calc(50px + env(safe-area-inset-bottom, 0px));right:90px;z-index:50;background:rgba(100,50,255,0.25);border:1px solid rgba(136,85,255,0.4);border-radius:8px;color:#fff;padding:8px 12px;cursor:pointer;font-size:16px;box-shadow:0 0 12px rgba(100,50,255,0.25);backdrop-filter:blur(4px);';
   btn.addEventListener('click',toggleMusic);
   document.body.appendChild(btn);
 }
@@ -314,6 +322,73 @@ let leaderboard = [];
 let localLeaderboard = [];
 const LB_KEY = 'nom_lb_local';
 const LB_MAX = 10;
+
+// JSONBin.io configuration
+const JSONBIN_API_KEY = '$2a$10$laWxXpPLHZIJxaF8I2HcGe/9CXo/d.aWoppS7MQxkGv7STeAfgIVm';
+const JSONBIN_BASE_URL = 'https://api.jsonbin.io/v3/b';
+const JSONBIN_BIN_ID_KEY = 'nom_jsonbin_id';
+// Default bin ID - will be persisted after first submission
+let jsonbinBinId = localStorage.getItem(JSONBIN_BIN_ID_KEY) || '69cfb853856a682189f772d8';
+
+// Online leaderboard functions
+async function fetchOnlineLeaderboard() {
+  if(!jsonbinBinId) return null;
+  try {
+    const resp = await fetch(`${JSONBIN_BASE_URL}/${jsonbinBinId}/latest`, {
+      headers: { 'X-Access-Key': JSONBIN_API_KEY }
+    });
+    if(!resp.ok) return null;
+    const data = await resp.json();
+    return data.record && data.record.scores ? data.record.scores : null;
+  } catch(e) {
+    console.warn('Failed to fetch online leaderboard:', e);
+    return null;
+  }
+}
+
+async function submitScoreOnline(nick, score, level) {
+  try {
+    const hashedNick = simpleHash(nick);
+    const entry = { nick: hashedNick, nickRaw: nick.toUpperCase().substring(0, 3), score, level, date: Date.now() };
+    
+    if(!jsonbinBinId) {
+      // Create new bin
+      const resp = await fetch(JSONBIN_BASE_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Access-Key': JSONBIN_API_KEY
+        },
+        body: JSON.stringify({ scores: [entry], version: 1 })
+      });
+      if(!resp.ok) return null;
+      const data = await resp.json();
+      jsonbinBinId = data.metadata.id;
+      localStorage.setItem(JSONBIN_BIN_ID_KEY, jsonbinBinId); // Persist for future use
+      return entry;
+    } else {
+      // Update existing bin - fetch first, merge, then update
+      const current = await fetchOnlineLeaderboard() || [];
+      current.push(entry);
+      current.sort((a, b) => b.score - a.score || a.date - b.date);
+      const updated = current.slice(0, LB_MAX);
+      
+      const resp = await fetch(`${JSONBIN_BASE_URL}/${jsonbinBinId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Access-Key': JSONBIN_API_KEY
+        },
+        body: JSON.stringify({ scores: updated, version: 1 })
+      });
+      if(!resp.ok) return null;
+      return entry;
+    }
+  } catch(e) {
+    console.warn('Failed to submit score online:', e);
+    return null;
+  }
+}
 
 // Simple hash for nicknames (bcrypt-style prefix for future compatibility)
 function simpleHash(nick) {
@@ -530,7 +605,7 @@ function initEnemies() {
       name: names[i%names.length],
       color:C.pw[i%C.pw.length],
       mode: i===0?'chase':'house',
-      releaseDelay: i*160,
+      releaseDelay: i===0 ? 120 : i*250 + 200, // First ghost waits, others stagger
       frightenedTimer:0,
     });
   }
@@ -562,17 +637,32 @@ function loadLevel() {
 function nextLevel() {
   level++;
   SFX.levelUp();
-  showOverlay(`LEVEL ${level}`,'GET READY!',1600);
-  setTimeout(loadLevel,1700);
+  showLevelTransition(level);
+  setTimeout(loadLevel,2000);
+}
+
+function showLevelTransition(levelNum) {
+  // Create a fancy level transition overlay
+  const overlay = document.createElement('div');
+  overlay.className = 'level-transition';
+  overlay.innerHTML = `
+    <div class="level-text">LEVEL ${levelNum}</div>
+    <div class="get-ready">GET READY!</div>
+  `;
+  document.body.appendChild(overlay);
+  setTimeout(() => overlay.remove(), 1900);
 }
 
 function playerDied() {
   lives--;
   updateLivesDisplay();
   SFX.die();
+  // Start death animation
+  deathAnim = true;
+  deathFrame = 0;
   if(lives<=0) { gameOver(); return; }
   showOverlay('OUCH!',`${lives} ${lives===1?'LIFE':'LIVES'} LEFT`,1300);
-  setTimeout(initPlayer,1350);
+  setTimeout(() => { deathAnim = false; initPlayer(); }, DEATH_FRAMES * 16.67);
 }
 
 function gameOver() {
@@ -652,22 +742,33 @@ function moveEnemy(en, now) {
   if(en.mode==='house') {
     en.releaseDelay--;
     if(en.releaseDelay<=0) {
-      // Move out of house
-      en.x=Math.floor(mapCols/2); en.y=Math.floor(mapRows/2)-1;
-      en.mode='chase'; en.dir='up';
+      // Move out of house - find exit path
+      const exitY = Math.floor(mapRows/2) - 2;
+      if(en.y > exitY) {
+        en.y--;
+      } else {
+        en.mode='chase'; en.dir='up';
+      }
     }
     return;
   }
   if(en.mode==='eaten') {
-    // Return to house
+    // Return to house - simple pathfinding
     const hx=Math.floor(mapCols/2), hy=Math.floor(mapRows/2);
     if(Math.abs(en.x-hx)<=1&&Math.abs(en.y-hy)<=1) {
-      en.mode='house'; en.releaseDelay=100;
+      en.mode='house'; en.releaseDelay=80 + level * 20;
     } else {
-      // Move toward house
+      // Move toward house center
       const dx=Math.sign(hx-en.x), dy=Math.sign(hy-en.y);
-      if(dx!==0&&tileWalkable(en.x+dx,en.y)) en.x+=dx;
-      else if(dy!==0&&tileWalkable(en.x,en.y+dy)) en.y+=dy;
+      // Prefer horizontal first, then vertical
+      if(dx!==0&&tileWalkable(en.x+dx,en.y)) {
+        en.x+=dx;
+      } else if(dy!==0&&tileWalkable(en.x,en.y+dy)) {
+        en.y+=dy;
+      } else if(dx!==0) {
+        // Try even if not ideal
+        en.x+=dx;
+      }
     }
     return;
   }
@@ -679,11 +780,18 @@ function moveEnemy(en, now) {
 
   // Choose direction
   if(en.mode==='frightened') {
-    // Random turn at intersections
+    // Random turn - but prefer going forward or turn, not reverse
     const opts=[];
     for(const d of DIRS) {
-      if(d===OPP[en.dir]) continue;
+      if(d===OPP[en.dir]) continue; // No reversing
       if(tileWalkable(en.x+DX[d],en.y+DY[d])) opts.push(d);
+    }
+    // If no valid options (cornered), allow reverse
+    if(opts.length===0) {
+      for(const d of DIRS) {
+        if(d===en.dir) continue;
+        if(tileWalkable(en.x+DX[d],en.y+DY[d])) opts.push(d);
+      }
     }
     if(opts.length>0) en.dir=opts[Math.floor(Math.random()*opts.length)];
   } else {
@@ -692,35 +800,27 @@ function moveEnemy(en, now) {
     const name = en.name || 'Blinky';
     switch(name) {
       case 'Blinky':
-        // Blinky: Direct chase - always targets player position
+        // Blinky: Direct chase - always targets player
         tx = player.x;
         ty = player.y;
         break;
       case 'Pinky':
-        // Pinky: Ambush - targets 4 tiles ahead of player's current direction
+        // Pinky: Ambush - targets 4 tiles ahead of player
         tx = player.x + DX[player.dir] * 4;
         ty = player.y + DY[player.dir] * 4;
         break;
       case 'Inky':
-        // Inky: Unpredictable - periodically uses scatter mode with random targets
-        if(!en._inkyScatter) en._inkyScatter = Math.floor(Math.random() * 30) + 20;
-        en._inkyScatter--;
-        if(en._inkyScatter <= 0) {
-          en._inkyScatter = Math.floor(Math.random() * 30) + 20;
-          tx = Math.floor(Math.random() * mapCols);
-          ty = Math.floor(Math.random() * mapRows);
-        } else {
-          tx = player.x; ty = player.y;
-        }
+        // Inky: Flanky - targets ahead of player in a different direction
+        tx = player.x + DX[player.dir] * 2 + DX[OPP[player.dir]] * 2;
+        ty = player.y + DY[player.dir] * 2 + DY[OPP[player.dir]] * 2;
         break;
       case 'Clyde':
-        // Clyde: Shy - chases when far (>8 tiles), scatters when close
+        // Clyde: Shy - chases when far, scatters when close
         const distToPlayer = Math.hypot(en.x - player.x, en.y - player.y);
         if(distToPlayer > 8) {
           tx = player.x; ty = player.y;
         } else {
-          // Scatter to bottom-left corner
-          tx = 0; ty = mapRows - 1;
+          tx = 0; ty = mapRows - 1; // Scatter corner
         }
         break;
       default:
@@ -731,19 +831,29 @@ function moveEnemy(en, now) {
     const opp=OPP[en.dir];
     let best=null, bestD=Infinity;
     for(const d of DIRS) {
-      if(d===opp) continue;
+      if(d===opp) continue; // No reversing unless necessary
       const nx=en.x+DX[d], ny=en.y+DY[d];
       if(!tileWalkable(nx,ny)) continue;
       const dist=Math.hypot(nx-tx,ny-ty);
       if(dist<bestD) { bestD=dist; best=d; }
     }
+    // If stuck, allow reversing
+    if(best===null) {
+      for(const d of DIRS) {
+        if(d===en.dir) continue;
+        const nx=en.x+DX[d], ny=en.y+DY[d];
+        if(tileWalkable(nx,ny)) { best=d; break; }
+      }
+    }
     if(best) en.dir=best;
   }
 
+  // Move in chosen direction
   const nx=en.x+DX[en.dir], ny=en.y+DY[en.dir];
   if(tileWalkable(nx,ny)) {
     en.x=wrapX(nx); en.y=ny;
   }
+  // Tunnel wrap for enemies
   if(en.x<0) en.x=mapCols-1;
   if(en.x>=mapCols) en.x=0;
 }
@@ -754,6 +864,7 @@ function checkCollisions() {
   if(tile===T_DOT) {
     map[player.y][player.x]=T_PATH;
     score+=10; dotsEaten++; SFX.eat();
+    showScorePopup(player.x, player.y, '+10');
     mapCacheDirty = true;
     checkComplete();
   } else if(tile===T_PWR) {
@@ -761,6 +872,8 @@ function checkCollisions() {
     score+=50; dotsEaten++; powerMode=true; powerTimer=Math.round(5*60);
     enemies.forEach(e=>{ if(e.mode!=='eaten') e.mode='frightened'; });
     SFX.power();
+    showPowerIndicator();
+    showScorePopup(player.x, player.y, '+50', 'big');
     mapCacheDirty = true;
     checkComplete();
   }
@@ -768,6 +881,7 @@ function checkCollisions() {
   if(fruitActive&&currentFruit&&player.x===currentFruit.x&&player.y===currentFruit.y) {
     score+=currentFruit.type.pts;
     SFX.fruitEat();
+    showScorePopup(player.x, player.y, '+' + currentFruit.type.pts, 'big');
     fruitActive=false; currentFruit=null;
     updateHUD();
   }
@@ -779,10 +893,47 @@ function checkCollisions() {
   updateHUD();
   for(const en of enemies) {
     if(en.x===player.x&&en.y===player.y) {
-      if(en.mode==='frightened') { en.mode='eaten'; score+=200; SFX.eatGhost(); updateHUD(); }
+      if(en.mode==='frightened') { 
+        en.mode='eaten'; 
+        const ghostBonus = 200 * ghostEatCombo;
+        score+=ghostBonus; 
+        SFX.eatGhost(); // This increments ghostEatCombo internally
+        ghostEatenFlash=true; 
+        ghostEatenTimer=GHOST_EATEN_FLASH_FRAMES; 
+        showScorePopup(en.x, en.y, '+' + ghostBonus, 'ghost');
+        updateHUD(); 
+      }
       else if(en.mode==='chase') { playerDied(); return; }
     }
   }
+}
+
+// Score Pop-up System
+function showScorePopup(tileX, tileY, text, type='') {
+  const wrap = document.getElementById('canvas-wrap');
+  if(!wrap) return;
+  
+  const ts = Math.floor(canvas.width/mapCols);
+  const px = tileX * ts + ts/2;
+  const py = tileY * ts + ts/2;
+  
+  const popup = document.createElement('div');
+  popup.className = 'score-popup' + (type ? ' ' + type : '');
+  popup.textContent = text;
+  popup.style.left = px + 'px';
+  popup.style.top = py + 'px';
+  
+  wrap.appendChild(popup);
+  setTimeout(() => popup.remove(), 800);
+}
+
+// Power Mode Indicator
+function showPowerIndicator() {
+  const indicator = document.getElementById('power-mode-indicator');
+  if(!indicator) return;
+  indicator.classList.remove('show');
+  void indicator.offsetWidth; // Force reflow
+  indicator.classList.add('show');
 }
 
 function checkComplete() {
@@ -792,13 +943,21 @@ function checkComplete() {
 // ── Update ─────────────────────────────────────────────────────────────────
 function update() {
   if(state!=='game') return;
+  // Don't update movement during death animation
+  if(deathAnim) { tick++; render(); return; }
   tick++;
   if(powerMode) {
     powerTimer--;
     if(powerTimer<=0) {
       powerMode=false;
+      ghostEatCombo=0; // Reset combo when power mode ends
       enemies.forEach(e=>{ if(e.mode==='frightened') e.mode='chase'; });
     }
+  }
+  // Ghost eaten flash timer
+  if(ghostEatenFlash) {
+    ghostEatenTimer--;
+    if(ghostEatenTimer<=0) ghostEatenFlash=false;
   }
   // Fruit spawn timer
   if(!fruitActive) {
@@ -859,16 +1018,9 @@ function render() {
           mctx.arc(px+ts/2,py+ts/2,DOT_R*(ts/40),0,Math.PI*2);
           mctx.fill();
         } else if(tile===T_PWR) {
-          // Path bg
+          // Path bg only - power pellets drawn dynamically for animation
           mctx.fillStyle='#1e1e3a';
           mctx.fillRect(px,py,ts,ts);
-          // Power pellet (static, no animation in cache)
-          mctx.fillStyle=C.power;
-          mctx.shadowBlur=12; mctx.shadowColor=C.power;
-          mctx.beginPath();
-          mctx.arc(px+ts/2,py+ts/2,POWER_R*(ts/40),0,Math.PI*2);
-          mctx.fill();
-          mctx.shadowBlur=0;
         } else if(tile===T_HOUS) {
           mctx.fillStyle=C.house;
           mctx.fillRect(px,py,ts,ts);
@@ -946,10 +1098,41 @@ function render() {
     ctx.shadowBlur=0;
   }
 
+  // Power Pellets - animated pulsing glow
+  for(let y=0;y<mapRows;y++) {
+    for(let x=0;x<mapCols;x++) {
+      if(map[y][x]===T_PWR) {
+        const px=x*ts+ts/2, py=y*ts+ts/2;
+        const pulse=Math.sin(tick*.1+x*.5+y*.3)*.2+.8;
+        const glowIntensity = powerMode ? (tick%20<10 ? 25 : 8) : 15 * pulse;
+        ctx.shadowBlur=glowIntensity;
+        ctx.shadowColor=powerMode ? '#ff3366' : C.power;
+        ctx.fillStyle=powerMode ? '#ff3366' : C.power;
+        ctx.beginPath();
+        ctx.arc(px,py,POWER_R*(ts/40)*pulse,0,Math.PI*2);
+        ctx.fill();
+        ctx.shadowBlur=0;
+      }
+    }
+  }
+
   // Ghosts
   for(const en of enemies) {
     const ex=en.x*ts+ts/2, ey=en.y*ts+ts/2, r=GHOST_R*(ts/40);
-    if(en.mode==='eaten') { drawGEyes(ex,ey,r*.6,en.dir); continue; }
+    if(en.mode==='eaten') { 
+      // Flash effect when ghost was just eaten
+      if(ghostEatenFlash && tick%4<2) {
+        ctx.fillStyle='#fff';
+        ctx.shadowBlur=8; ctx.shadowColor='#fff';
+        ctx.beginPath();
+        ctx.arc(ex,ey-r*.1,r*.6,Math.PI,0,false);
+        ctx.lineTo(ex+r*.6,ey+r*.3);
+        ctx.closePath(); ctx.fill();
+        ctx.shadowBlur=0;
+      }
+      drawGEyes(ex,ey,r*.6,en.dir); 
+      continue; 
+    }
     let col=en.color;
     if(en.mode==='frightened') col=pw?'#eee':'#2244ff';
     ctx.fillStyle=col;
@@ -981,17 +1164,45 @@ function render() {
 
   // Player
   const px=player.x*ts+ts/2, py=player.y*ts+ts/2, pr=PLAYER_R*(ts/40);
-  const ma=Math.abs(Math.sin(player.mouth))*.3;
-  player.mouth=(player.mouth+.22)%Math.PI;
-  ctx.fillStyle=C.player;
-  ctx.shadowBlur=12; ctx.shadowColor=C.player;
-  ctx.beginPath();
-  const ba={right:0,down:Math.PI/2,left:Math.PI,up:-Math.PI/2}[player.dir]||0;
-  ctx.arc(px,py,pr,ba+ma,ba+Math.PI*2-ma); ctx.lineTo(px,py); ctx.closePath(); ctx.fill();
-  ctx.shadowBlur=0;
-  const eo={up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]}[player.dir]||[0,0];
-  ctx.fillStyle='#222';
-  ctx.beginPath(); ctx.arc(px+eo[0]*pr*.28,py+eo[1]*pr*.28-pr*.12,pr*.12,0,Math.PI*2); ctx.fill();
+  
+  if(deathAnim) {
+    // Death animation: mouth flapping then shrinking
+    const progress = deathFrame / DEATH_FRAMES;
+    ctx.fillStyle=C.player;
+    ctx.shadowBlur=12; ctx.shadowColor=C.player;
+    ctx.beginPath();
+    const ba={right:0,down:Math.PI/2,left:Math.PI,up:-Math.PI/2}[player.dir]||0;
+    
+    if(progress < 0.6) {
+      // Phase 1: Mouth flapping rapidly (waka-waka)
+      const flapSpeed = 0.5;
+      const ma = Math.abs(Math.sin(deathFrame * flapSpeed)) * 0.4;
+      ctx.arc(px,py,pr,ba+ma,ba+Math.PI*2-ma);
+    } else {
+      // Phase 2: Shrinking into nothing
+      const shrinkProgress = (progress - 0.6) / 0.4;
+      const radius = pr * (1 - shrinkProgress);
+      if(radius > 0) {
+        ctx.arc(px,py,radius,ba,ba+Math.PI*2);
+      }
+    }
+    ctx.lineTo(px,py); ctx.closePath(); ctx.fill();
+    ctx.shadowBlur=0;
+    deathFrame++;
+  } else {
+    // Normal Pac-Man
+    const ma=Math.abs(Math.sin(player.mouth))*.3;
+    player.mouth=(player.mouth+.22)%Math.PI;
+    ctx.fillStyle=C.player;
+    ctx.shadowBlur=12; ctx.shadowColor=C.player;
+    ctx.beginPath();
+    const ba={right:0,down:Math.PI/2,left:Math.PI,up:-Math.PI/2}[player.dir]||0;
+    ctx.arc(px,py,pr,ba+ma,ba+Math.PI*2-ma); ctx.lineTo(px,py); ctx.closePath(); ctx.fill();
+    ctx.shadowBlur=0;
+    const eo={up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]}[player.dir]||[0,0];
+    ctx.fillStyle='#222';
+    ctx.beginPath(); ctx.arc(px+eo[0]*pr*.28,py+eo[1]*pr*.28-pr*.12,pr*.12,0,Math.PI*2); ctx.fill();
+  }
 }
 
 function drawGEyes(ex,ey,r,dir) {
@@ -1146,10 +1357,12 @@ $('btn-leaderboard').addEventListener('click',()=>{ renderLeaderboard(); showScr
 $('btn-lb-menu').addEventListener('click',()=>{ renderLeaderboard(); showScreen('leaderboard'); });
 $('btn-lb-back').addEventListener('click',()=>showScreen('start'));
 
-// Submit score button
-$('btn-submit-score').addEventListener('click',()=>{
+// Submit score button - submits to both local and online
+$('btn-submit-score').addEventListener('click',async ()=>{
   const nick = ($('lb-nick').value || 'AAA').toUpperCase().substring(0, 3).padEnd(3, 'A');
-  const rank = addToLeaderboard(nick, score, level);
+  addToLeaderboard(nick, score, level);
+  // Submit online in background
+  submitScoreOnline(nick, score, level).catch(()=>{});
   $('submit-score-wrap').classList.add('hidden');
   renderLeaderboard(nick);
   showScreen('leaderboard');
